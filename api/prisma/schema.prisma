@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String      @id @default(cuid())
+  email                 String      @unique
+  password              String?     // nullable untuk social login
+  firstName             String?
+  lastName              String?
+  phone                 String?
+  address               String?
+  city                  String?
+  province              String?
+  postalCode            String?
+  profilePicture        String?     // file path atau URL
+  role                  String      @default("CUSTOMER")  // CUSTOMER, SUPER_ADMIN, OUTLET_ADMIN, WORKER, DRIVER
+  isVerified            Boolean     @default(false)
+  loginProvider         String?     // 'email', 'google', 'facebook', dll
+  
+  // Verification token
+  emailVerificationToken String?
+  emailVerificationTokenExpiry DateTime?
+  
+  // Reset password
+  resetPasswordToken    String?
+  resetPasswordTokenExpiry DateTime?
+  
+  // Metadata
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  lastLogin             DateTime?
+  
+  // Relations
+  pickupRequests        PickupRequest[]
+  orders                Order[]
+  
+  @@index([email])
+  @@index([isVerified])
+}
+
+model PickupRequest {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id])
+  
+  pickupAddress         String
+  pickupCity            String
+  pickupProvince        String
+  pickupPostalCode      String
+  latitude              Float?
+  longitude             Float?
+  
+  status                String      @default("PENDING") // PENDING, ACCEPTED, PICKED_UP, ARRIVED_AT_OUTLET, COMPLETED
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+}
+
+model Order {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id])
+  
+  // Order items
+  items                 OrderItem[]
+  
+  totalKilo             Float
+  status                String      @default("MENUNGGU_PENJEMPUTAN")
+  
+  totalPrice            Float
+  isPaid                Boolean     @default(false)
+  paymentMethod         String?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([isPaid])
+}
+
+model OrderItem {
+  id                    String      @id @default(cuid())
+  orderId               String
+  order                 Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  itemType              String      // Kaos, Celana Panjang, etc
+  quantity              Int
+  
+  @@index([orderId])
+}
