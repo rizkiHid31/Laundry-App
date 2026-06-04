@@ -4,16 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "start": "npm run build && node dist/app.js",
-    "dev": "tsx --watch src/app.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "tsx ./src/app.ts",
+    "dev": "nodemon tsx app.ts",
+    "postinstall": "prisma generate",
+    "build": "npx prisma generate && npx prisma migrate deploy && tsc",
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate dev",
+    "db:migrate:reset": "npx prisma migrate reset",
+    "db:soft": "npx prisma db push && npx prisma db seed",
+    "db:hard": "npx prisma migrate reset && npx prisma db push && npx prisma db seed"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^6.19.3",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -28,7 +34,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^25.9.0",
     "@types/nodemailer": "^6.4.14",
-    "prisma": "^6.19.3",
+    "prisma": "^7.8.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"
   }
