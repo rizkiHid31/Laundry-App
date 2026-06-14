@@ -12,8 +12,20 @@
     "strict": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
+<<<<<<< Updated upstream
     "skipLibCheck": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
+=======
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "prisma"]
+>>>>>>> Stashed changes
 }

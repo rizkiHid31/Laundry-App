@@ -7,7 +7,11 @@ datasource db {
 }
 
 
+<<<<<<< Updated upstream
 enum Role {
+=======
+enum UserRole {
+>>>>>>> Stashed changes
   CUSTOMER
   SUPER_ADMIN
   OUTLET_ADMIN
@@ -15,6 +19,7 @@ enum Role {
   DRIVER
 }
 
+<<<<<<< Updated upstream
 enum WorkerStation {
   WASHING
   IRONING
@@ -24,6 +29,12 @@ enum WorkerStation {
 enum TokenType {
   EMAIL_VERIFY
   RESET_PASSWORD
+=======
+enum ShiftStatus {
+  ABSENT
+  PRESENT
+  COMPLETED
+>>>>>>> Stashed changes
 }
 
 enum PickupStatus {
@@ -83,6 +94,7 @@ enum ComplaintStatus {
 // ─────────────────────────────────────────────
 
 model User {
+<<<<<<< Updated upstream
   id            String         @id @default(cuid())
   email         String         @unique
   passwordHash  String?
@@ -107,6 +119,36 @@ model User {
   complaints         Complaint[]
   orderStations      OrderStation[]
   bypassApprovals    BypassRequest[]     @relation("AdminBypass")
+=======
+  id                           String    @id @default(uuid()) @db.Uuid
+  firstName                    String    @map("first_name") @db.VarChar(100)
+  lastName                     String?   @map("last_name") @db.VarChar(100)
+  email                        String    @unique @db.VarChar(255)
+  password                     String?
+  isVerified                   Boolean   @default(false) @map("is_verified")
+  profilePicture               String?   @map("profile_picture")
+  role                         UserRole  @default(CUSTOMER)
+  loginProvider                String    @default("email") @map("login_provider") @db.VarChar(50)
+  phone                        String?   @db.VarChar(20)
+  address                      String?
+  city                         String?   @db.VarChar(100)
+  province                     String?   @db.VarChar(100)
+  postalCode                   String?   @map("postal_code") @db.VarChar(10)
+  emailVerificationToken       String?   @map("email_verification_token")
+  emailVerificationTokenExpiry DateTime? @map("email_verification_token_expiry")
+  resetPasswordToken           String?   @map("reset_password_token")
+  resetPasswordTokenExpiry     DateTime? @map("reset_password_token_expiry")
+  lastLogin                    DateTime? @map("last_login")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
+
+  oauthAccounts   OAuthAccount[]
+  addresses       Address[]
+  outletEmployees OutletEmployee[]
+  pickupRequests  PickupRequest[]
+  notifications   Notification[]
+  complaints      Complaint[]
+>>>>>>> Stashed changes
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -119,6 +161,7 @@ model User {
 // VERIFICATION TOKEN
 // ─────────────────────────────────────────────
 
+<<<<<<< Updated upstream
 model VerificationToken {
   id        String    @id @default(cuid())
   userId    String
@@ -138,6 +181,28 @@ model VerificationToken {
 // ─────────────────────────────────────────────
 // OUTLET
 // ─────────────────────────────────────────────
+=======
+// ─── User Address ─────────────────────────────────────────────────────────────
+
+model Address {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  label       String   @db.VarChar(100)
+  fullAddress String   @map("full_address")
+  latitude    Decimal  @db.Decimal(10, 7)
+  longitude   Decimal  @db.Decimal(10, 7)
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user             User              @relation(fields: [userId], references: [id])
+  pickupRequests   PickupRequest[]
+  deliveryRequests DeliveryRequest[]
+
+  @@map("addresses")
+}
+
+// ─── Outlet ───────────────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 
 model Outlet {
   id        String  @id @default(cuid())
@@ -148,9 +213,17 @@ model Outlet {
   maxRadius Float   @default(10)
   isActive  Boolean @default(true)
 
+<<<<<<< Updated upstream
   staff          User[]          @relation("OutletStaff")
   pickupRequests PickupRequest[]
   orders         Order[]
+=======
+  outletEmployees  OutletEmployee[]
+  outletItemPrices OutletItemPrice[]
+  pickupRequests   PickupRequest[]
+  deliveryRequests DeliveryRequest[]
+  orders           Order[]
+>>>>>>> Stashed changes
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -177,9 +250,61 @@ model UserAddress {
   @@index([userId])
 }
 
+<<<<<<< Updated upstream
 // ─────────────────────────────────────────────
 // PICKUP REQUEST
 // ─────────────────────────────────────────────
+=======
+// ─── Attendance ───────────────────────────────────────────────────────────────
+
+model Shift {
+  id         String      @id @default(uuid()) @db.Uuid
+  employeeId String      @map("employee_id") @db.Uuid
+  shiftDate  DateTime    @map("shift_date") @db.Date
+  checkIn    DateTime?   @map("check_in")
+  checkOut   DateTime?   @map("check_out")
+  status     ShiftStatus @default(ABSENT)
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  employee OutletEmployee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, shiftDate])
+  @@map("shifts")
+}
+
+// ─── Pricing ──────────────────────────────────────────────────────────────────
+
+model LaundryItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(100)
+  unit      String   @default("pcs") @db.VarChar(20)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  outletItemPrices OutletItemPrice[]
+  orderItems       OrderItem[]
+  stationItems     StationItem[]
+
+  @@map("laundry_items")
+}
+
+model OutletItemPrice {
+  id            String   @id @default(uuid()) @db.Uuid
+  outletId      String   @map("outlet_id") @db.Uuid
+  laundryItemId String   @map("laundry_item_id") @db.Uuid
+  pricePerUnit  Decimal  @map("price_per_unit") @db.Decimal(10, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  outlet      Outlet      @relation(fields: [outletId], references: [id])
+  laundryItem LaundryItem @relation(fields: [laundryItemId], references: [id])
+
+  @@unique([outletId, laundryItemId])
+  @@map("outlet_item_prices")
+}
+
+// ─── Pickup & Delivery ────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 
 model PickupRequest {
   id          String       @id @default(cuid())

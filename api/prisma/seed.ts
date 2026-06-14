@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 import "dotenv/config";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -20,6 +21,301 @@ async function main() {
       role: Role.SUPER_ADMIN,
       isVerified: true,
     },
+=======
+import 'dotenv/config';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import bcrypt from 'bcrypt';
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
+
+async function hash(pw: string) {
+  return bcrypt.hash(pw, 10);
+}
+
+async function seeder() {
+  console.log('🌱 Seeding test data...');
+
+  // ── Outlet ───────────────────────────────────────────────────────────────
+  const outlet = await prisma.outlet.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Outlet Pusat',
+      address: 'Jl. Sudirman No. 1, Jakarta',
+      latitude: -6.2088,
+      longitude: 106.8456,
+      radiusKm: 10,
+    },
+  });
+  console.log('  ✔ Outlet:', outlet.name);
+
+  // ── Users ────────────────────────────────────────────────────────────────
+  const pw = await hash('Password123!');
+
+  const superAdmin = await prisma.user.upsert({
+    where: { email: 'superadmin@laundry.test' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000010',
+      email: 'superadmin@laundry.test',
+      firstName: 'Super',
+      lastName: 'Admin',
+      password: pw,
+      isVerified: true,
+      role: 'SUPER_ADMIN',
+      loginProvider: 'email',
+    },
+  });
+
+  const outletAdminUser = await prisma.user.upsert({
+    where: { email: 'admin@laundry.test' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000011',
+      email: 'admin@laundry.test',
+      firstName: 'Outlet',
+      lastName: 'Admin',
+      password: pw,
+      isVerified: true,
+      role: 'OUTLET_ADMIN',
+      loginProvider: 'email',
+    },
+  });
+
+  const workerUser = await prisma.user.upsert({
+    where: { email: 'worker@laundry.test' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000012',
+      email: 'worker@laundry.test',
+      firstName: 'Budi',
+      lastName: 'Worker',
+      password: pw,
+      isVerified: true,
+      role: 'WORKER',
+      loginProvider: 'email',
+    },
+  });
+
+  const driverUser = await prisma.user.upsert({
+    where: { email: 'driver@laundry.test' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000013',
+      email: 'driver@laundry.test',
+      firstName: 'Andi',
+      lastName: 'Driver',
+      password: pw,
+      isVerified: true,
+      role: 'DRIVER',
+      loginProvider: 'email',
+    },
+  });
+
+  const customerUser = await prisma.user.upsert({
+    where: { email: 'customer@laundry.test' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000014',
+      email: 'customer@laundry.test',
+      firstName: 'Sari',
+      lastName: 'Customer',
+      password: pw,
+      isVerified: true,
+      role: 'CUSTOMER',
+      loginProvider: 'email',
+    },
+  });
+
+  console.log('  ✔ Users created');
+
+  // ── OutletEmployees ───────────────────────────────────────────────────────
+  const adminEmp = await prisma.outletEmployee.upsert({
+    where: { outletId_userId: { outletId: outlet.id, userId: outletAdminUser.id } },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000020',
+      outletId: outlet.id,
+      userId: outletAdminUser.id,
+      isActive: true,
+    },
+  });
+
+  const workerEmp = await prisma.outletEmployee.upsert({
+    where: { outletId_userId: { outletId: outlet.id, userId: workerUser.id } },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000021',
+      outletId: outlet.id,
+      userId: workerUser.id,
+      isActive: true,
+    },
+  });
+
+  const driverEmp = await prisma.outletEmployee.upsert({
+    where: { outletId_userId: { outletId: outlet.id, userId: driverUser.id } },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000022',
+      outletId: outlet.id,
+      userId: driverUser.id,
+      isActive: true,
+    },
+  });
+
+  console.log('  ✔ OutletEmployees linked');
+
+  // ── LaundryItems ──────────────────────────────────────────────────────────
+  const shirt = await prisma.laundryItem.upsert({
+    where: { name: 'Kemeja' },
+    update: {},
+    create: { id: '00000000-0000-0000-0000-000000000030', name: 'Kemeja', unit: 'pcs' },
+  });
+
+  const pants = await prisma.laundryItem.upsert({
+    where: { name: 'Celana' },
+    update: {},
+    create: { id: '00000000-0000-0000-0000-000000000031', name: 'Celana', unit: 'pcs' },
+  });
+
+  console.log('  ✔ LaundryItems created');
+
+  // ── Customer Address ──────────────────────────────────────────────────────
+  const address = await prisma.address.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000040' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000040',
+      userId: customerUser.id,
+      label: 'Rumah',
+      fullAddress: 'Jl. Kebon Jeruk No. 5, Jakarta Barat',
+      latitude: -6.1944,
+      longitude: 106.7895,
+      isPrimary: true,
+    },
+  });
+
+  console.log('  ✔ Customer address created');
+
+  // ── PickupRequest (WAITING_DRIVER) ────────────────────────────────────────
+  const pickup = await prisma.pickupRequest.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000050' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000050',
+      customerId: customerUser.id,
+      addressId: address.id,
+      outletId: outlet.id,
+      scheduledAt: new Date(),
+      status: 'WAITING_DRIVER',
+    },
+  });
+
+  console.log('  ✔ PickupRequest created (status: WAITING_DRIVER) → id:', pickup.id);
+
+  // ── Order in PROCESSING (ready for worker) ────────────────────────────────
+  const order = await prisma.order.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000060' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000060',
+      invoiceNumber: 'INV-TEST-001',
+      pickupRequestId: pickup.id,
+      outletId: outlet.id,
+      outletAdminId: adminEmp.id,
+      totalKg: 3.5,
+      totalPrice: 35000,
+      status: 'PROCESSING',
+    },
+  });
+
+  // OrderItems
+  await prisma.orderItem.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000070' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000070',
+      orderId: order.id,
+      laundryItemId: shirt.id,
+      quantity: 3,
+      pricePerUnit: 5000,
+    },
+  });
+
+  await prisma.orderItem.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000071' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000071',
+      orderId: order.id,
+      laundryItemId: pants.id,
+      quantity: 2,
+      pricePerUnit: 7000,
+    },
+  });
+
+  // OrderStations: WASHING (PENDING), IRONING (PENDING), PACKING (PENDING)
+  await prisma.orderStation.upsert({
+    where: { orderId_station: { orderId: order.id, station: 'WASHING' } },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000080',
+      orderId: order.id,
+      station: 'WASHING',
+      status: 'PENDING',
+    },
+  });
+
+  await prisma.orderStation.upsert({
+    where: { orderId_station: { orderId: order.id, station: 'IRONING' } },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000081',
+      orderId: order.id,
+      station: 'IRONING',
+      status: 'PENDING',
+    },
+  });
+
+  await prisma.orderStation.upsert({
+    where: { orderId_station: { orderId: order.id, station: 'PACKING' } },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000082',
+      orderId: order.id,
+      station: 'PACKING',
+      status: 'PENDING',
+    },
+  });
+
+  console.log('  ✔ Order', order.invoiceNumber, '(PROCESSING) + 3 stations created');
+
+  console.log('\n✅ Seed complete!\n');
+  console.log('── Test accounts (password: Password123!) ────────────────────');
+  console.log('  SUPER_ADMIN   superadmin@laundry.test');
+  console.log('  OUTLET_ADMIN  admin@laundry.test');
+  console.log('  WORKER        worker@laundry.test');
+  console.log('  DRIVER        driver@laundry.test');
+  console.log('  CUSTOMER      customer@laundry.test');
+  console.log('─────────────────────────────────────────────────────────────');
+  console.log('  Pickup ID:  ', pickup.id);
+  console.log('  Order ID:   ', order.id);
+  console.log('  WASHING ID: ', '00000000-0000-0000-0000-000000000080');
+  console.log('─────────────────────────────────────────────────────────────');
+}
+
+seeder()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+>>>>>>> Stashed changes
   });
 
   // ─── Outlet ────────────────────────────────────────────────────
