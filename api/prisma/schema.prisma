@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,41 +9,34 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
-<<<<<<< Updated upstream
-enum Role {
-=======
-enum UserRole {
->>>>>>> Stashed changes
-  CUSTOMER
-  SUPER_ADMIN
-  OUTLET_ADMIN
-  WORKER
-  DRIVER
-}
-
-<<<<<<< Updated upstream
-enum WorkerStation {
-  WASHING
-  IRONING
-  PACKING
-}
-
-enum TokenType {
+enum VerificationTokenType {
   EMAIL_VERIFY
   RESET_PASSWORD
-=======
+}
+
+enum RoleScope {
+  GLOBAL
+  OUTLET
+}
+
 enum ShiftStatus {
   ABSENT
   PRESENT
   COMPLETED
->>>>>>> Stashed changes
 }
 
 enum PickupStatus {
   WAITING_DRIVER
   ON_THE_WAY
   ARRIVED_AT_OUTLET
+}
+
+enum DeliveryStatus {
+  WAITING_DRIVER
+  ON_THE_WAY
+  DELIVERED
 }
 
 enum OrderStatus {
@@ -53,14 +49,12 @@ enum OrderStatus {
   ON_DELIVERY
   DELIVERED
   CONFIRMED
-  CANCELLED
 }
 
-enum PaymentStatus {
-  PENDING
-  PAID
-  FAILED
-  EXPIRED
+enum StationName {
+  WASHING
+  IRONING
+  PACKING
 }
 
 enum StationStatus {
@@ -76,113 +70,126 @@ enum BypassStatus {
   REJECTED
 }
 
-enum DriverTaskStatus {
+enum PaymentStatus {
   PENDING
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
+  PAID
+  FAILED
+  EXPIRED
 }
 
 enum ComplaintStatus {
-  PENDING
-  IN_PROGRESS
+  OPEN
+  IN_REVIEW
   RESOLVED
 }
 
-// ─────────────────────────────────────────────
-// USER
-// ─────────────────────────────────────────────
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 model User {
-<<<<<<< Updated upstream
-  id            String         @id @default(cuid())
-  email         String         @unique
-  passwordHash  String?
-  name          String
-  phone         String?
-  photoUrl      String?
-  role          Role           @default(CUSTOMER)
-  workerStation WorkerStation?
-  isVerified    Boolean        @default(false)
-  googleId      String?        @unique
-  outletId      String?
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(100)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String?  @map("password_hash")
+  isVerified   Boolean  @default(false) @map("is_verified")
+  photoUrl     String?  @map("photo_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  outlet             Outlet?             @relation("OutletStaff", fields: [outletId], references: [id])
   verificationTokens VerificationToken[]
-  addresses          UserAddress[]
-  pickupRequests     PickupRequest[]     @relation("CustomerPickups")
-  driverPickups      PickupRequest[]     @relation("DriverPickups")
-  outletOrders       Order[]             @relation("OutletAdminOrders")
-  driverTasks        DriverTask[]
-  attendance         Attendance[]
+  oauthAccounts      OAuthAccount[]
+  userRoles          UserRole[]
+  addresses          Address[]
+  outletEmployees    OutletEmployee[]
+  pickupRequests     PickupRequest[]
   notifications      Notification[]
   complaints         Complaint[]
-  orderStations      OrderStation[]
-  bypassApprovals    BypassRequest[]     @relation("AdminBypass")
-=======
-  id                           String    @id @default(uuid()) @db.Uuid
-  firstName                    String    @map("first_name") @db.VarChar(100)
-  lastName                     String?   @map("last_name") @db.VarChar(100)
-  email                        String    @unique @db.VarChar(255)
-  password                     String?
-  isVerified                   Boolean   @default(false) @map("is_verified")
-  profilePicture               String?   @map("profile_picture")
-  role                         UserRole  @default(CUSTOMER)
-  loginProvider                String    @default("email") @map("login_provider") @db.VarChar(50)
-  phone                        String?   @db.VarChar(20)
-  address                      String?
-  city                         String?   @db.VarChar(100)
-  province                     String?   @db.VarChar(100)
-  postalCode                   String?   @map("postal_code") @db.VarChar(10)
-  emailVerificationToken       String?   @map("email_verification_token")
-  emailVerificationTokenExpiry DateTime? @map("email_verification_token_expiry")
-  resetPasswordToken           String?   @map("reset_password_token")
-  resetPasswordTokenExpiry     DateTime? @map("reset_password_token_expiry")
-  lastLogin                    DateTime? @map("last_login")
-  createdAt                    DateTime  @default(now()) @map("created_at")
-  updatedAt                    DateTime  @updatedAt @map("updated_at")
 
-  oauthAccounts   OAuthAccount[]
-  addresses       Address[]
-  outletEmployees OutletEmployee[]
-  pickupRequests  PickupRequest[]
-  notifications   Notification[]
-  complaints      Complaint[]
->>>>>>> Stashed changes
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([outletId])
-  @@index([role])
+  @@map("users")
 }
 
-// ─────────────────────────────────────────────
-// VERIFICATION TOKEN
-// ─────────────────────────────────────────────
+model OAuthAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  provider          String   @db.VarChar(50)
+  providerAccountId String   @map("provider_account_id") @db.VarChar(255)
+  createdAt         DateTime @default(now()) @map("created_at")
 
-<<<<<<< Updated upstream
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerAccountId])
+  @@map("oauth_accounts")
+}
+
 model VerificationToken {
-  id        String    @id @default(cuid())
-  userId    String
-  token     String    @unique
-  type      TokenType
-  isUsed    Boolean   @default(false)
-  expiresAt DateTime
+  id        String                @id @default(uuid()) @db.Uuid
+  userId    String                @map("user_id") @db.Uuid
+  token     String                @unique
+  type      VerificationTokenType
+  isUsed    Boolean               @default(false) @map("is_used")
+  expiresAt DateTime              @map("expires_at")
+  createdAt DateTime              @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([token])
+  @@map("verification_tokens")
 }
 
-// ─────────────────────────────────────────────
-// OUTLET
-// ─────────────────────────────────────────────
-=======
-// ─── User Address ─────────────────────────────────────────────────────────────
+// ─── RBAC ─────────────────────────────────────────────────────────────────────
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique @db.VarChar(50)
+  scope       RoleScope
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  action      String  @db.VarChar(50)
+  resource    String  @db.VarChar(80)
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@unique([action, resource])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(uuid()) @db.Uuid
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  roleId    String    @map("role_id") @db.Uuid
+  outletId  String?   @map("outlet_id") @db.Uuid
+  grantedAt DateTime  @default(now()) @map("granted_at")
+  expiresAt DateTime? @map("expires_at")
+
+  user   User    @relation(fields: [userId], references: [id])
+  role   Role    @relation(fields: [roleId], references: [id])
+  outlet Outlet? @relation(fields: [outletId], references: [id])
+
+  @@unique([userId, roleId, outletId])
+  @@map("user_roles")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
 
 model Address {
   id          String   @id @default(uuid()) @db.Uuid
@@ -202,60 +209,46 @@ model Address {
 }
 
 // ─── Outlet ───────────────────────────────────────────────────────────────────
->>>>>>> Stashed changes
 
 model Outlet {
-  id        String  @id @default(cuid())
-  name      String
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(150)
   address   String
-  latitude  Float
-  longitude Float
-  maxRadius Float   @default(10)
-  isActive  Boolean @default(true)
+  latitude  Decimal  @db.Decimal(10, 7)
+  longitude Decimal  @db.Decimal(10, 7)
+  radiusKm  Decimal  @default(10) @map("radius_km") @db.Decimal(5, 2)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
 
-<<<<<<< Updated upstream
-  staff          User[]          @relation("OutletStaff")
-  pickupRequests PickupRequest[]
-  orders         Order[]
-=======
+  userRoles        UserRole[]
   outletEmployees  OutletEmployee[]
   outletItemPrices OutletItemPrice[]
   pickupRequests   PickupRequest[]
   deliveryRequests DeliveryRequest[]
   orders           Order[]
->>>>>>> Stashed changes
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("outlets")
 }
 
-// ─────────────────────────────────────────────
-// USER ADDRESS
-// ─────────────────────────────────────────────
+model OutletEmployee {
+  id        String   @id @default(uuid()) @db.Uuid
+  outletId  String   @map("outlet_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
 
-model UserAddress {
-  id        String  @id @default(cuid())
-  userId    String
-  label     String
-  address   String
-  latitude  Float
-  longitude Float
-  isPrimary Boolean @default(false)
+  outlet           Outlet            @relation(fields: [outletId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
+  shifts           Shift[]
+  pickupRequests   PickupRequest[]
+  deliveryRequests DeliveryRequest[]
+  orderStations    OrderStation[]
+  bypassRequests   BypassRequest[]
+  ordersAsAdmin    Order[]
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  pickupRequests PickupRequest[]
-
-  createdAt DateTime @default(now())
-
-  @@index([userId])
+  @@unique([outletId, userId])
+  @@map("outlet_employees")
 }
-
-<<<<<<< Updated upstream
-// ─────────────────────────────────────────────
-// PICKUP REQUEST
-// ─────────────────────────────────────────────
-=======
-// ─── Attendance ───────────────────────────────────────────────────────────────
 
 model Shift {
   id         String      @id @default(uuid()) @db.Uuid
@@ -304,266 +297,189 @@ model OutletItemPrice {
 }
 
 // ─── Pickup & Delivery ────────────────────────────────────────────────────────
->>>>>>> Stashed changes
 
 model PickupRequest {
-  id          String       @id @default(cuid())
-  customerId  String
-  addressId   String
-  outletId    String
-  driverId    String?
-  scheduledAt DateTime
-  status      PickupStatus @default(WAITING_DRIVER)
+  id              String       @id @default(uuid()) @db.Uuid
+  customerId      String       @map("customer_id") @db.Uuid
+  addressId       String       @map("address_id") @db.Uuid
+  outletId        String       @map("outlet_id") @db.Uuid
+  driverId        String?      @map("driver_id") @db.Uuid
+  scheduledAt     DateTime     @map("scheduled_at")
+  pickedUpAt      DateTime?    @map("picked_up_at")
+  arrivedAtOutlet DateTime?    @map("arrived_at_outlet")
+  status          PickupStatus @default(WAITING_DRIVER)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
 
-  customer User        @relation("CustomerPickups", fields: [customerId], references: [id])
-  address  UserAddress @relation(fields: [addressId], references: [id])
-  outlet   Outlet      @relation(fields: [outletId], references: [id])
-  driver   User?       @relation("DriverPickups", fields: [driverId], references: [id])
+  customer User            @relation(fields: [customerId], references: [id])
+  address  Address         @relation(fields: [addressId], references: [id])
+  outlet   Outlet          @relation(fields: [outletId], references: [id])
+  driver   OutletEmployee? @relation(fields: [driverId], references: [id])
   order    Order?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([customerId])
-  @@index([outletId])
-  @@index([driverId])
-  @@index([status])
+  @@map("pickup_requests")
 }
 
-// ─────────────────────────────────────────────
-// LAUNDRY ITEM (master data)
-// ─────────────────────────────────────────────
+model DeliveryRequest {
+  id          String         @id @default(uuid()) @db.Uuid
+  orderId     String         @unique @map("order_id") @db.Uuid
+  outletId    String         @map("outlet_id") @db.Uuid
+  driverId    String?        @map("driver_id") @db.Uuid
+  addressId   String         @map("address_id") @db.Uuid
+  pickedUpAt  DateTime?      @map("picked_up_at")
+  deliveredAt DateTime?      @map("delivered_at")
+  status      DeliveryStatus @default(WAITING_DRIVER)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
 
-model LaundryItem {
-  id       String  @id @default(cuid())
-  name     String  @unique
-  unit     String  @default("pcs")
-  isActive Boolean @default(true)
+  order   Order           @relation(fields: [orderId], references: [id])
+  outlet  Outlet          @relation(fields: [outletId], references: [id])
+  driver  OutletEmployee? @relation(fields: [driverId], references: [id])
+  address Address         @relation(fields: [addressId], references: [id])
 
-  orderItems   OrderItem[]
-  stationItems StationItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("delivery_requests")
 }
 
-// ─────────────────────────────────────────────
-// ORDER
-// ─────────────────────────────────────────────
+// ─── Orders ───────────────────────────────────────────────────────────────────
 
 model Order {
-  id              String      @id @default(cuid())
-  invoiceNumber   String      @unique
-  pickupRequestId String      @unique
-  outletId        String
-  outletAdminId   String
-  totalWeight     Float?
-  pricePerKg      Decimal?    @db.Decimal(10, 2)
-  totalPrice      Decimal?    @db.Decimal(10, 2)
+  id              String      @id @default(uuid()) @db.Uuid
+  invoiceNumber   String      @unique @map("invoice_number") @db.VarChar(50)
+  pickupRequestId String      @unique @map("pickup_request_id") @db.Uuid
+  outletId        String      @map("outlet_id") @db.Uuid
+  outletAdminId   String      @map("outlet_admin_id") @db.Uuid
+  totalKg         Decimal     @map("total_kg") @db.Decimal(6, 2)
+  totalPrice      Decimal?    @map("total_price") @db.Decimal(12, 2)
   status          OrderStatus @default(PROCESSING)
-  paymentDeadline DateTime?
-  confirmedAt     DateTime?
-  notes           String?
+  paymentDeadline DateTime?   @map("payment_deadline")
+  confirmedAt     DateTime?   @map("confirmed_at")
+  autoConfirmAt   DateTime?   @map("auto_confirm_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  pickupRequest PickupRequest  @relation(fields: [pickupRequestId], references: [id])
-  outlet        Outlet         @relation(fields: [outletId], references: [id])
-  outletAdmin   User           @relation("OutletAdminOrders", fields: [outletAdminId], references: [id])
-  orderItems    OrderItem[]
-  orderStations OrderStation[]
-  payment       Payment?
-  driverTasks   DriverTask[]
-  complaints    Complaint[]
-  notifications Notification[]
+  pickupRequest   PickupRequest    @relation(fields: [pickupRequestId], references: [id])
+  outlet          Outlet           @relation(fields: [outletId], references: [id])
+  outletAdmin     OutletEmployee   @relation(fields: [outletAdminId], references: [id])
+  orderItems      OrderItem[]
+  orderStations   OrderStation[]
+  deliveryRequest DeliveryRequest?
+  payment         Payment?
+  notifications   Notification[]
+  complaints      Complaint[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([outletId])
-  @@index([status])
+  @@map("orders")
 }
-
-// ─────────────────────────────────────────────
-// ORDER ITEM (dibuat oleh outlet admin)
-// ─────────────────────────────────────────────
 
 model OrderItem {
-  id            String @id @default(cuid())
-  orderId       String
-  laundryItemId String
+  id            String  @id @default(uuid()) @db.Uuid
+  orderId       String  @map("order_id") @db.Uuid
+  laundryItemId String  @map("laundry_item_id") @db.Uuid
   quantity      Int
+  pricePerUnit  Decimal @map("price_per_unit") @db.Decimal(10, 2)
 
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order       @relation(fields: [orderId], references: [id])
   laundryItem LaundryItem @relation(fields: [laundryItemId], references: [id])
 
-  createdAt DateTime @default(now())
-
-  @@index([orderId])
+  @@map("order_items")
 }
 
-// ─────────────────────────────────────────────
-// ORDER STATION (tracking per stasiun)
-// ─────────────────────────────────────────────
+// ─── Worker Stations ──────────────────────────────────────────────────────────
 
 model OrderStation {
-  id          String        @id @default(cuid())
-  orderId     String
-  workerId    String?
-  station     WorkerStation
+  id          String        @id @default(uuid()) @db.Uuid
+  orderId     String        @map("order_id") @db.Uuid
+  workerId    String?       @map("worker_id") @db.Uuid
+  station     StationName
   status      StationStatus @default(PENDING)
-  startedAt   DateTime?
-  completedAt DateTime?
+  notes       String?
+  startedAt   DateTime?     @map("started_at")
+  completedAt DateTime?     @map("completed_at")
 
-  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  worker         User?           @relation(fields: [workerId], references: [id])
+  order          Order           @relation(fields: [orderId], references: [id])
+  worker         OutletEmployee? @relation(fields: [workerId], references: [id])
   stationItems   StationItem[]
   bypassRequests BypassRequest[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
   @@unique([orderId, station])
-  @@index([workerId])
+  @@map("order_stations")
 }
-
-// ─────────────────────────────────────────────
-// STATION ITEM (input ulang quantity oleh worker)
-// ─────────────────────────────────────────────
 
 model StationItem {
-  id             String @id @default(cuid())
-  orderStationId String
-  laundryItemId  String
-  quantity       Int
+  id            String @id @default(uuid()) @db.Uuid
+  stationId     String @map("station_id") @db.Uuid
+  laundryItemId String @map("laundry_item_id") @db.Uuid
+  quantityInput Int    @map("quantity_input")
 
-  orderStation OrderStation @relation(fields: [orderStationId], references: [id], onDelete: Cascade)
-  laundryItem  LaundryItem  @relation(fields: [laundryItemId], references: [id])
+  station     OrderStation @relation(fields: [stationId], references: [id])
+  laundryItem LaundryItem  @relation(fields: [laundryItemId], references: [id])
 
-  createdAt DateTime @default(now())
-
-  @@index([orderStationId])
+  @@map("station_items")
 }
-
-// ─────────────────────────────────────────────
-// BYPASS REQUEST (worker → outlet admin)
-// ─────────────────────────────────────────────
 
 model BypassRequest {
-  id             String       @id @default(cuid())
-  orderStationId String
-  adminId        String?
-  reason         String
-  adminNote      String?
-  status         BypassStatus @default(PENDING)
+  id         String       @id @default(uuid()) @db.Uuid
+  stationId  String       @map("station_id") @db.Uuid
+  adminId    String?      @map("admin_id") @db.Uuid
+  reason     String
+  status     BypassStatus @default(PENDING)
+  adminNote  String?      @map("admin_note")
+  approvedAt DateTime?    @map("approved_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
 
-  orderStation OrderStation @relation(fields: [orderStationId], references: [id], onDelete: Cascade)
-  admin        User?        @relation("AdminBypass", fields: [adminId], references: [id])
+  station OrderStation    @relation(fields: [stationId], references: [id])
+  admin   OutletEmployee? @relation(fields: [adminId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([orderStationId])
-  @@index([status])
+  @@map("bypass_requests")
 }
 
-// ─────────────────────────────────────────────
-// DRIVER TASK (delivery)
-// ─────────────────────────────────────────────
-
-model DriverTask {
-  id       String           @id @default(cuid())
-  driverId String
-  orderId  String
-  status   DriverTaskStatus @default(PENDING)
-
-  driver User  @relation(fields: [driverId], references: [id])
-  order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([driverId, status])
-  @@index([orderId])
-}
-
-// ─────────────────────────────────────────────
-// PAYMENT
-// ─────────────────────────────────────────────
+// ─── Payment ──────────────────────────────────────────────────────────────────
 
 model Payment {
-  id              String        @id @default(cuid())
-  orderId         String        @unique
-  amount          Decimal       @db.Decimal(10, 2)
-  gateway         String?
-  gatewayToken    String?
-  gatewayResponse Json?
-  status          PaymentStatus @default(PENDING)
-  paidAt          DateTime?
+  id           String        @id @default(uuid()) @db.Uuid
+  orderId      String        @unique @map("order_id") @db.Uuid
+  amount       Decimal       @db.Decimal(12, 2)
+  gateway      String        @db.VarChar(50)
+  gatewayToken String?       @map("gateway_token")
+  gatewayRef   String?       @map("gateway_ref") @db.VarChar(100)
+  status       PaymentStatus @default(PENDING)
+  paidAt       DateTime?     @map("paid_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("payments")
 }
 
-// ─────────────────────────────────────────────
-// ATTENDANCE
-// ─────────────────────────────────────────────
-
-model Attendance {
-  id       String    @id @default(cuid())
-  userId   String
-  date     DateTime  @db.Date
-  clockIn  DateTime
-  clockOut DateTime?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, date])
-  @@index([userId])
-}
-
-// ─────────────────────────────────────────────
-// NOTIFICATION
-// ─────────────────────────────────────────────
+// ─── Notifications & Complaints ───────────────────────────────────────────────
 
 model Notification {
-  id      String  @id @default(cuid())
-  userId  String
-  orderId String?
-  title   String
-  message String
-  type    String
-  isRead  Boolean @default(false)
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  orderId   String?  @map("order_id") @db.Uuid
+  type      String   @db.VarChar(80)
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  user  User   @relation(fields: [userId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id])
 
-  createdAt DateTime @default(now())
-
-  @@index([userId, isRead])
+  @@map("notifications")
 }
 
-// ─────────────────────────────────────────────
-// COMPLAINT
-// ─────────────────────────────────────────────
-
 model Complaint {
-  id          String          @id @default(cuid())
-  orderId     String
-  customerId  String
+  id          String          @id @default(uuid()) @db.Uuid
+  orderId     String          @map("order_id") @db.Uuid
+  customerId  String          @map("customer_id") @db.Uuid
   description String
-  status      ComplaintStatus @default(PENDING)
-  adminNote   String?
+  photoUrl    String?         @map("photo_url")
+  status      ComplaintStatus @default(OPEN)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
 
-  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order    Order @relation(fields: [orderId], references: [id])
   customer User  @relation(fields: [customerId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([orderId])
-  @@index([customerId])
+  @@map("complaints")
 }

@@ -1,12 +1,12 @@
 import { Router } from "express";
-import workerRoutes from "./worker.routes.js";
-import driverRoutes from "./driver.routes.js";
-import attendanceRoutes from "./attendance.routes.js";
+import attendanceRoutes from "./attendanceRoutes.js";
+import driverRoutes from "./driverRoutes.js";
+import workerRoutes from "./workerRoutes.js";
 
 const router = Router();
 
-router.use("/workers", workerRoutes);
-router.use("/drivers", driverRoutes);
 router.use("/attendance", attendanceRoutes);
+router.use("/driver", driverRoutes);
+router.use("/worker", workerRoutes);
 
 export default router;

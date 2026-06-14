@@ -10,6 +10,7 @@ export interface AuthRequest extends Request {
     email: string;
     role: Role;
     outletId: string | null;
+    isVerified: boolean;
   };
 }
 
@@ -27,10 +28,20 @@ export const authenticate = async (
   const token = authHeader.split(" ")[1];
 
   try {
-    const payload = jwt.verify(token, config.jwt.secret as string) as { id: string };
+    // Support both { id } and { userId } in JWT payload
+    const payload = jwt.verify(token, config.jwt.secret as string) as {
+      id?: string;
+      userId?: string;
+    };
+
+    const userId = payload.userId ?? payload.id;
+    if (!userId) {
+      res.status(401).json({ message: "Token tidak valid" });
+      return;
+    }
 
     const user = await prisma.user.findUnique({
-      where: { id: payload.id },
+      where: { id: userId },
       select: { id: true, email: true, role: true, outletId: true, isVerified: true },
     });
 

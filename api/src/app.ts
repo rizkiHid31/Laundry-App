@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config/index.js";
 import routes from "./routes/index.js";
+import authRoutes from "./routes/authRoutes.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
 const app = express();
@@ -14,6 +15,7 @@ app.get("/", (_req, res) => {
   res.json({ message: "Laundry App API is running" });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api", routes);
 
 app.use(errorHandler);

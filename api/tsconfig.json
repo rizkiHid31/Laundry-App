@@ -10,22 +10,20 @@
     "sourceMap": true,
     "declaration": true,
     "strict": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-<<<<<<< Updated upstream
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
-=======
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "moduleResolution": "node",
-    "ignoreDeprecations": "6.0"
+    "resolveJsonModule": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "prisma"]
->>>>>>> Stashed changes
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/controllers/attendance",
+    "src/controllers/drivers",
+    "src/controllers/workers",
+    "src/routes/attendance.routes.ts",
+    "src/routes/driver.routes.ts",
+    "src/routes/worker.routes.ts",
+    "src/middlewares/roleGuard.ts"
+  ]
 }
