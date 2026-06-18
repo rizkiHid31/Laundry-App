@@ -6,14 +6,10 @@ export interface User {
   firstName: string;
   lastName: string;
   phone?: string;
-  address?: string;
-  city?: string;
-  province?: string;
-  postalCode?: string;
   profilePicture?: string;
   role: string;
   isVerified: boolean;
-  loginProvider: string;
+  loginProvider?: string;
 }
 
 interface AuthContextType {

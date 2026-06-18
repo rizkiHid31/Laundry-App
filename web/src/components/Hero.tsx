@@ -32,7 +32,7 @@ const carouselItems: CarouselItem[] = [
   },
 ];
 
-export default function Hero() {
+export default function Hero({ onCta }: { onCta?: () => void }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
 
@@ -97,7 +97,10 @@ export default function Hero() {
                 <p className="text-base sm:text-lg md:text-xl text-gray-100 mb-6 sm:mb-8">
                   {item.description}
                 </p>
-                <button className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm sm:text-base">
+                <button
+                  onClick={onCta}
+                  className="px-6 sm:px-8 py-2 sm:py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-sm sm:text-base"
+                >
                   {item.cta}
                 </button>
               </div>
@@ -147,7 +150,10 @@ export default function Hero() {
         <p className="text-gray-600 text-base sm:text-lg max-w-2xl mx-auto mb-8 sm:mb-12">
           Enjoy convenient, professional laundry service with pickup and delivery to your doorstep
         </p>
-        <button className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-base">
+        <button
+          onClick={onCta}
+          className="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-base"
+        >
           Start Your Order Now
         </button>
       </div>

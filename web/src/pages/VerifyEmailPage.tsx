@@ -23,9 +23,9 @@ export default function VerifyEmailPage() {
 
   useEffect(() => {
     if (!token && !email) {
-      navigate('/');
+      // Allow resend verification without redirecting away
     }
-  }, [token, email, navigate]);
+  }, [token, email]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

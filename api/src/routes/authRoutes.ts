@@ -1,5 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth';
+import { uploadImage } from '../middleware/upload';
 import {
   register,
   verifyEmailAndSetPassword,
@@ -29,6 +30,11 @@ router.get('/me', authMiddleware, getCurrentUser as any);
 router.put('/profile', authMiddleware, updateProfile as any);
 router.put('/password', authMiddleware, updatePassword as any);
 router.put('/email', authMiddleware, updateEmail as any);
-router.post('/profile-picture', authMiddleware, uploadProfilePicture as any);
+router.post(
+  '/profile-picture',
+  authMiddleware,
+  uploadImage.single('file'),
+  uploadProfilePicture as any
+);
 
 export default router;
