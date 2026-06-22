@@ -1,6 +1,9 @@
 import express, { Application } from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes";
+import attendanceRoutes from "./routes/attendanceRoutes";
+import driverRoutes from "./routes/driverRoutes";
+import workerRoutes from "./routes/workerRoutes";
 
 const app: Application = express();
 
@@ -18,6 +21,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/drivers", driverRoutes);
+app.use("/api/workers", workerRoutes);
 
 // Health check
 app.get("/health", (req, res) => {
