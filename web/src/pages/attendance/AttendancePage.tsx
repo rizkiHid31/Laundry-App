@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface Shift {
   id: string;
@@ -18,7 +16,6 @@ interface Meta {
 }
 
 export default function AttendancePage() {
-  const { token } = useAuth();
   const [today, setToday] = useState<Shift | null>(null);
   const [history, setHistory] = useState<Shift[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
@@ -27,20 +24,16 @@ export default function AttendancePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const authHeader = { Authorization: `Bearer ${token}` };
-
   const fetchToday = useCallback(async () => {
-    const res = await fetch(`${API}/api/attendance/today`, { headers: authHeader });
-    const data = await res.json();
-    setToday(data.data);
-  }, [token]);
+    const res = await api.get('/api/attendance/today');
+    setToday(res.data.data);
+  }, []);
 
   const fetchHistory = useCallback(async () => {
-    const res = await fetch(`${API}/api/attendance/my?page=${page}&limit=10`, { headers: authHeader });
-    const data = await res.json();
-    setHistory(data.data ?? []);
-    setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-  }, [token, page]);
+    const res = await api.get('/api/attendance/my', { params: { page, limit: 10 } });
+    setHistory(res.data.data ?? []);
+    setMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
+  }, [page]);
 
   useEffect(() => {
     setLoading(true);
@@ -51,18 +44,12 @@ export default function AttendancePage() {
     setActionLoading(true);
     setMessage('');
     try {
-      const res = await fetch(`${API}/api/attendance/${action}`, {
-        method: 'POST',
-        headers: authHeader,
-      });
-      const data = await res.json();
-      setMessage(data.message);
-      if (res.ok) {
-        await fetchToday();
-        await fetchHistory();
-      }
-    } catch {
-      setMessage('Terjadi kesalahan');
+      const res = await api.post(`/api/attendance/${action}`);
+      setMessage(res.data.message);
+      await fetchToday();
+      await fetchHistory();
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || 'Terjadi kesalahan');
     } finally {
       setActionLoading(false);
     }

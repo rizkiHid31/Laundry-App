@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface Pickup {
   id: string;
@@ -20,7 +18,6 @@ interface Delivery {
 }
 
 export default function DriverDashboardPage() {
-  const { token } = useAuth();
   const [activePickup, setActivePickup] = useState<Pickup | null>(null);
   const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
   const [availPickups, setAvailPickups] = useState<Pickup[]>([]);
@@ -28,30 +25,31 @@ export default function DriverDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
-  const h = { Authorization: `Bearer ${token}` };
-
   const fetchAll = useCallback(async () => {
     const [ap, ad, vp, vd] = await Promise.all([
-      fetch(`${API}/api/drivers/pickups/active`, { headers: h }).then((r) => r.json()),
-      fetch(`${API}/api/drivers/deliveries/active`, { headers: h }).then((r) => r.json()),
-      fetch(`${API}/api/drivers/pickups/available`, { headers: h }).then((r) => r.json()),
-      fetch(`${API}/api/drivers/deliveries/available`, { headers: h }).then((r) => r.json()),
+      api.get('/api/drivers/pickups/active'),
+      api.get('/api/drivers/deliveries/active'),
+      api.get('/api/drivers/pickups/available'),
+      api.get('/api/drivers/deliveries/available'),
     ]);
-    setActivePickup(ap.data ?? null);
-    setActiveDelivery(ad.data ?? null);
-    setAvailPickups(vp.data ?? []);
-    setAvailDeliveries(vd.data ?? []);
+    setActivePickup(ap.data.data ?? null);
+    setActiveDelivery(ad.data.data ?? null);
+    setAvailPickups(vp.data.data ?? []);
+    setAvailDeliveries(vd.data.data ?? []);
     setLoading(false);
-  }, [token]);
+  }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const action = async (url: string, method = 'POST') => {
+  const action = async (url: string, method: 'POST' | 'PATCH' = 'POST') => {
     setMessage('');
-    const res = await fetch(`${API}${url}`, { method, headers: h });
-    const data = await res.json();
-    setMessage(data.message);
-    if (res.ok) fetchAll();
+    try {
+      const res = await api({ method, url });
+      setMessage(res.data.message);
+      fetchAll();
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || 'Terjadi kesalahan');
+    }
   };
 
   const fmtDate = (iso: string) =>

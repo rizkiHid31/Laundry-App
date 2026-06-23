@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface ShiftRecord {
   id: string;
@@ -15,7 +13,6 @@ interface ShiftRecord {
 interface Meta { page: number; totalPages: number; total: number; }
 
 export default function AttendanceReportPage() {
-  const { token } = useAuth();
   const [records, setRecords] = useState<ShiftRecord[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -28,23 +25,19 @@ export default function AttendanceReportPage() {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
+      const params: Record<string, string> = { page: String(page), limit: '20' };
+      if (dateFrom) params['dateFrom'] = dateFrom;
+      if (dateTo) params['dateTo'] = dateTo;
 
-      const res = await fetch(`${API}/api/attendance/report?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
-      setRecords(data.data ?? []);
-      setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-    } catch {
-      setError('Gagal memuat data');
+      const res = await api.get('/api/attendance/report', { params });
+      setRecords(res.data.data ?? []);
+      setMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Gagal memuat data');
     } finally {
       setLoading(false);
     }
-  }, [token, page, dateFrom, dateTo]);
+  }, [page, dateFrom, dateTo]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 

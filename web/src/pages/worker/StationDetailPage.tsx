@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface ItemInput { laundryItemId: string; quantityInput: number; name: string; }
 interface OrderItem { laundryItemId: string; quantity: number; laundryItem: { name: string; unit: string }; }
@@ -20,7 +18,6 @@ interface StationData {
 export default function StationDetailPage() {
   const { stationId } = useParams<{ stationId: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
 
   const [station, setStation] = useState<StationData | null>(null);
   const [items, setItems] = useState<ItemInput[]>([]);
@@ -31,12 +28,9 @@ export default function StationDetailPage() {
   const [showBypass, setShowBypass] = useState(false);
   const [bypassReason, setBypassReason] = useState('');
 
-  const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
   const fetchStation = useCallback(async () => {
-    const res = await fetch(`${API}/api/workers/orders?limit=100`, { headers: h });
-    const data = await res.json();
-    const found: StationData | undefined = (data.data ?? []).find((s: StationData) => s.id === stationId);
+    const res = await api.get('/api/workers/orders', { params: { limit: 100 } });
+    const found: StationData | undefined = (res.data.data ?? []).find((s: StationData) => s.id === stationId);
     if (found) {
       setStation(found);
       setItems(found.order.orderItems.map((i) => ({
@@ -46,7 +40,7 @@ export default function StationDetailPage() {
       })));
     }
     setLoading(false);
-  }, [token, stationId]);
+  }, [stationId]);
 
   useEffect(() => { fetchStation(); }, [fetchStation]);
 
@@ -59,21 +53,17 @@ export default function StationDetailPage() {
     setSubmitting(true);
     setMessage('');
     setIsError(false);
-    const res = await fetch(`${API}/api/workers/orders/${stationId}/complete`, {
-      method: 'POST',
-      headers: h,
-      body: JSON.stringify({ items }),
-    });
-    const data = await res.json();
-    if (res.ok) {
+    try {
+      await api.post(`/api/workers/orders/${stationId}/complete`, { items });
       setMessage('Station selesai!');
       setTimeout(() => navigate('/worker'), 1500);
-    } else {
+    } catch (error: any) {
       setIsError(true);
-      setMessage(data.message);
-      if (data.mismatches) setShowBypass(true);
+      setMessage(error.response?.data?.message || 'Terjadi kesalahan');
+      if (error.response?.data?.mismatches) setShowBypass(true);
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   const handleBypass = async () => {
@@ -83,16 +73,17 @@ export default function StationDetailPage() {
       return;
     }
     setSubmitting(true);
-    const res = await fetch(`${API}/api/workers/orders/${stationId}/bypass`, {
-      method: 'POST',
-      headers: h,
-      body: JSON.stringify({ reason: bypassReason }),
-    });
-    const data = await res.json();
-    setMessage(data.message);
-    setIsError(!res.ok);
-    setSubmitting(false);
-    if (res.ok) setTimeout(() => navigate('/worker'), 1500);
+    try {
+      const res = await api.post(`/api/workers/orders/${stationId}/bypass`, { reason: bypassReason });
+      setMessage(res.data.message);
+      setIsError(false);
+      setTimeout(() => navigate('/worker'), 1500);
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || 'Terjadi kesalahan');
+      setIsError(true);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const stationLabel: Record<string, string> = { WASHING: 'Cuci', IRONING: 'Setrika', PACKING: 'Packing' };
