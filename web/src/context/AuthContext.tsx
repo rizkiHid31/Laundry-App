@@ -15,6 +15,7 @@ export interface User {
   role: string;
   isVerified: boolean;
   loginProvider: string;
+  userRoles?: Array<{ role: { name: string; scope: string } }>;
 }
 
 interface AuthContextType {
@@ -25,7 +26,7 @@ interface AuthContextType {
   register: (email: string, firstName: string, lastName?: string) => Promise<void>;
   verifyEmail: (token: string, password: string) => Promise<void>;
   resendVerificationEmail: (email: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<string[]>;
   logout: () => void;
   requestResetPassword: (email: string) => Promise<void>;
   confirmResetPassword: (token: string, password: string) => Promise<void>;
@@ -66,7 +67,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, firstName: string, lastName?: string) => {
     try {
-      await api.post('/api/auth/register', { email, firstName, lastName });
+      const name = [firstName, lastName].filter(Boolean).join(' ');
+      await api.post('/api/auth/register', { email, name });
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Registration failed');
     }
@@ -88,13 +90,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<string[]> => {
     try {
       const res = await api.post('/api/auth/login', { email, password });
-      const { token: newToken, user: newUser } = res.data.data;
+      const { token: newToken } = res.data.data;
       setToken(newToken);
-      setUser(newUser);
       localStorage.setItem('token', newToken);
+
+      // Fetch full profile (includes outlet-scoped roles like driver/worker,
+      // which the login response's flat `role` field omits).
+      const meRes = await api.get('/api/auth/me');
+      const fullUser: User = meRes.data.data;
+      setUser(fullUser);
+
+      return (fullUser.userRoles ?? []).map((ur) => ur.role.name);
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Login failed');
     }

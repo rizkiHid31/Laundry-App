@@ -42,7 +42,7 @@ export default function WorkerHistoryPage() {
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Riwayat Pekerjaan ({meta.total})</h1>
 
       {loading ? (

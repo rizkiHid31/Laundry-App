@@ -92,7 +92,7 @@ export default function StationDetailPage() {
   if (!station) return <div className="min-h-screen flex items-center justify-center text-gray-400">Station tidak ditemukan</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
       <button onClick={() => navigate('/worker')} className="text-blue-600 text-sm mb-4 flex items-center gap-1">
         ← Kembali
       </button>

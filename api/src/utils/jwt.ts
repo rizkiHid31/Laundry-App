@@ -7,13 +7,10 @@ export type JWTPayload = {
 };
 
 const JWT_SECRET: Secret = process.env.JWT_SECRET || 'your-secret-key';
-const JWT_EXPIRE_TIME: string | number = process.env.JWT_EXPIRE_TIME || '24h';
+const JWT_EXPIRE_TIME = (process.env.JWT_EXPIRE_TIME || '24h') as unknown as NonNullable<SignOptions['expiresIn']>;
 
 export const generateToken = (payload: JWTPayload): string => {
-  const options: SignOptions = {
-    expiresIn: JWT_EXPIRE_TIME as string | number,
-  };
-  return jwt.sign(payload, JWT_SECRET, options);
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRE_TIME });
 };
 
 export const verifyToken = (token: string): JWTPayload | null => {

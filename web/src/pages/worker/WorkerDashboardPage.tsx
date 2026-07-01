@@ -60,8 +60,13 @@ export default function WorkerDashboardPage() {
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard Worker</h1>
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
+      <div className="flex justify-between items-center mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard Worker</h1>
+        <Link to="/worker/history" className="text-sm text-blue-600 font-medium hover:underline">
+          Riwayat →
+        </Link>
+      </div>
       <p className="text-sm text-gray-500 mb-6">Halo, {user?.firstName ?? 'Worker'}</p>
 
       {message && (

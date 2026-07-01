@@ -1,67 +1,78 @@
-import { StationStatus, StationName, OrderStatus, BypassStatus } from '@prisma/client';
+import { Prisma, StationStatus, StationName, OrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPagination } from '../utils/pagination';
+import { getPagination, buildMeta } from '../utils/pagination';
+import {
+  stationOrderStatus,
+  getTodayStation,
+  checkMismatch,
+  advanceOrderStage,
+  ItemInput,
+} from './stationShared';
 
-const stationOrderStatus: Record<StationName, OrderStatus> = {
-  WASHING: OrderStatus.WASHING,
-  IRONING: OrderStatus.IRONING,
-  PACKING: OrderStatus.PACKING,
+const myOrdersInclude = {
+  order: {
+    include: {
+      orderItems: { include: { laundryItem: { select: { name: true, unit: true } } } },
+      pickupRequest: { select: { scheduledAt: true, customer: { select: { name: true } } } },
+    },
+  },
+  worker: { select: { user: { select: { name: true } } } },
 };
 
-const nextStation: Partial<Record<StationName, StationName>> = {
-  WASHING: StationName.IRONING,
-  IRONING: StationName.PACKING,
-};
+const buildMyOrdersWhere = (outletId: string, myStation: StationName, station?: StationName) => ({
+  AND: [
+    { station: myStation, order: { outletId, status: stationOrderStatus[myStation] } },
+    { status: { in: [StationStatus.PENDING, StationStatus.IN_PROGRESS] as StationStatus[] } },
+    ...(station ? [{ station }] : []),
+  ],
+});
 
-type ItemInput = { laundryItemId: string; quantityInput: number };
-
-const checkMismatch = (inputs: ItemInput[], references: ItemInput[]) => {
-  return references.filter((ref) => {
-    const found = inputs.find((i) => i.laundryItemId === ref.laundryItemId);
-    return !found || found.quantityInput !== ref.quantityInput;
-  });
-};
-
-export const getMyOrders = async (
-  outletId: string,
-  query: Record<string, unknown>,
-  station?: StationName,
-) => {
+export const getMyOrders = async (outletId: string, query: Record<string, unknown>, workerId: string, station?: StationName) => {
   const { page, limit, skip } = getPagination(query);
 
-  const where = {
-    order: { outletId },
-    status: { in: [StationStatus.PENDING, StationStatus.IN_PROGRESS] as StationStatus[] },
-    ...(station ? { station } : {}),
-  };
+  const myStation = await getTodayStation(workerId);
+  if (!myStation) {
+    return { stations: [], meta: buildMeta(page, limit, 0) };
+  }
 
+  const where = buildMyOrdersWhere(outletId, myStation, station);
   const [stations, total] = await prisma.$transaction([
-    prisma.orderStation.findMany({
-      where,
-      include: {
-        order: {
-          include: {
-            orderItems: { include: { laundryItem: { select: { name: true, unit: true } } } },
-            pickupRequest: { select: { scheduledAt: true, customer: { select: { name: true } } } },
-          },
-        },
-        worker: { select: { user: { select: { name: true } } } },
-      },
-      orderBy: { order: { createdAt: 'asc' } },
-      skip,
-      take: limit,
-    }),
+    prisma.orderStation.findMany({ where, include: myOrdersInclude, orderBy: { order: { createdAt: 'asc' } }, skip, take: limit }),
     prisma.orderStation.count({ where }),
   ]);
 
-  return { stations, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { stations, meta: buildMeta(page, limit, total) };
 };
 
-export const startStation = async (workerId: string, stationId: string) => {
-  const station = await prisma.orderStation.findUnique({ where: { id: stationId } });
+const ensureStationStartable = (
+  station: { status: StationStatus; station: StationName; order: { status: OrderStatus } } | null,
+) => {
   if (!station || station.status !== StationStatus.PENDING) {
     throw Object.assign(new Error('Station tidak tersedia'), { status: 400 });
   }
+  if (station.order.status !== stationOrderStatus[station.station]) {
+    throw Object.assign(new Error('Station sebelumnya belum selesai'), { status: 400 });
+  }
+};
+
+const ensureMatchesShift = (myStation: StationName | null, targetStation: StationName) => {
+  if (myStation !== targetStation) {
+    throw Object.assign(
+      new Error(`Shift Anda hari ini bertugas di station ${myStation ?? '-'}, bukan ${targetStation}`),
+      { status: 403 },
+    );
+  }
+};
+
+export const startStation = async (workerId: string, stationId: string) => {
+  const station = await prisma.orderStation.findUnique({
+    where: { id: stationId },
+    include: { order: { select: { status: true } } },
+  });
+  ensureStationStartable(station);
+
+  const myStation = await getTodayStation(workerId);
+  ensureMatchesShift(myStation, station!.station);
 
   return prisma.orderStation.update({
     where: { id: stationId },
@@ -69,213 +80,109 @@ export const startStation = async (workerId: string, stationId: string) => {
   });
 };
 
-export const completeStation = async (
-  workerId: string,
-  stationId: string,
-  items: ItemInput[],
-) => {
-  if (!items || items.length === 0) {
-    throw Object.assign(new Error('Item wajib diisi'), { status: 400 });
-  }
+type OrderItemLike = { laundryItemId: string; quantity: number };
+type StationWithHistory = {
+  station: StationName;
+  order: {
+    orderItems: OrderItemLike[];
+    orderStations: { station: StationName; stationItems: ItemInput[] }[];
+  };
+};
 
-  const station = await prisma.orderStation.findUnique({
-    where: { id: stationId },
-    include: {
-      order: {
-        include: {
-          orderItems: true,
-          orderStations: { include: { stationItems: true } },
-          payment: true,
-        },
-      },
-    },
-  });
-
-  if (!station || station.workerId !== workerId || station.status !== StationStatus.IN_PROGRESS) {
-    throw Object.assign(new Error('Station tidak valid'), { status: 400 });
-  }
-
-  // Tentukan referensi item dari station sebelumnya
-  let referenceItems: ItemInput[];
+const getReferenceItems = (station: StationWithHistory): ItemInput[] => {
   if (station.station === StationName.WASHING) {
-    referenceItems = station.order.orderItems.map((i) => ({
+    return station.order.orderItems.map((i) => ({
       laundryItemId: i.laundryItemId,
       quantityInput: i.quantity,
     }));
-  } else {
-    const prevStation = station.station === StationName.IRONING ? StationName.WASHING : StationName.IRONING;
-    const prev = station.order.orderStations.find((s) => s.station === prevStation);
-    referenceItems = (prev?.stationItems ?? []).map((i) => ({
-      laundryItemId: i.laundryItemId,
-      quantityInput: i.quantityInput,
-    }));
   }
+  const prevStation = station.station === StationName.IRONING ? StationName.WASHING : StationName.IRONING;
+  const prev = station.order.orderStations.find((s) => s.station === prevStation);
+  return prev?.stationItems ?? [];
+};
 
-  const mismatches = checkMismatch(items, referenceItems);
+const ensureItemsProvided = (items: ItemInput[]) => {
+  if (!items || items.length === 0) {
+    throw Object.assign(new Error('Item wajib diisi'), { status: 400 });
+  }
+};
+
+type CompletableStation = { workerId: string | null; status: StationStatus } | null;
+
+const ensureCanCompleteStation = (station: CompletableStation, workerId: string) => {
+  if (!station || station.workerId !== workerId || station.status !== StationStatus.IN_PROGRESS) {
+    throw Object.assign(new Error('Station tidak valid'), { status: 400 });
+  }
+};
+
+const ensureItemsMatch = (items: ItemInput[], reference: ItemInput[]) => {
+  const mismatches = checkMismatch(items, reference);
   if (mismatches.length > 0) {
     throw Object.assign(
       new Error('Jumlah item tidak sesuai. Buat bypass request untuk melanjutkan.'),
       { status: 400, mismatches },
     );
   }
+};
 
-  const isPaid = station.order.payment?.status === 'PAID';
-  const next = nextStation[station.station];
-
-  await prisma.$transaction(async (tx) => {
-    await tx.stationItem.deleteMany({ where: { stationId } });
-    await tx.stationItem.createMany({
-      data: items.map((i) => ({
-        stationId,
-        laundryItemId: i.laundryItemId,
-        quantityInput: i.quantityInput,
-      })),
-    });
-
-    await tx.orderStation.update({
-      where: { id: stationId },
-      data: { status: StationStatus.COMPLETED, completedAt: new Date() },
-    });
-
-    if (station.station === StationName.PACKING) {
-      const newOrderStatus = isPaid ? OrderStatus.READY_TO_DELIVER : OrderStatus.WAITING_PAYMENT;
-      await tx.order.update({ where: { id: station.orderId }, data: { status: newOrderStatus } });
-
-      if (isPaid) {
-        const pickupReq = await tx.pickupRequest.findUnique({
-          where: { id: station.order.pickupRequestId },
-        });
-        if (pickupReq) {
-          await tx.deliveryRequest.create({
-            data: {
-              orderId: station.orderId,
-              outletId: station.order.outletId,
-              addressId: pickupReq.addressId,
-              status: 'WAITING_DRIVER',
-            },
-          });
-        }
-      }
-    } else if (next) {
-      await tx.order.update({
-        where: { id: station.orderId },
-        data: { status: stationOrderStatus[next] },
-      });
-      await tx.orderStation.update({
-        where: { orderId_station: { orderId: station.orderId, station: next } },
-        data: { status: StationStatus.PENDING },
-      });
-    }
+const saveStationItems = async (tx: Prisma.TransactionClient, stationId: string, items: ItemInput[]) => {
+  await tx.stationItem.deleteMany({ where: { stationId } });
+  await tx.stationItem.createMany({
+    data: items.map((i) => ({ stationId, laundryItemId: i.laundryItemId, quantityInput: i.quantityInput })),
   });
 };
 
-export const requestBypass = async (stationId: string, reason: string) => {
-  if (!reason || reason.trim().length < 10) {
-    throw Object.assign(new Error('Alasan minimal 10 karakter'), { status: 400 });
-  }
+type CompletionOrderRef = { orderId: string; station: StationName; order: { pickupRequestId: string; outletId: string } };
 
-  const station = await prisma.orderStation.findUnique({ where: { id: stationId } });
-  if (!station || station.status !== StationStatus.IN_PROGRESS) {
-    throw Object.assign(new Error('Station tidak valid'), { status: 400 });
-  }
-
-  const existing = await prisma.bypassRequest.findFirst({
-    where: { stationId, status: BypassStatus.PENDING },
+const persistCompletion = async (
+  tx: Prisma.TransactionClient,
+  stationId: string,
+  items: ItemInput[],
+  station: CompletionOrderRef,
+  isPaid: boolean,
+) => {
+  await saveStationItems(tx, stationId, items);
+  await tx.orderStation.update({
+    where: { id: stationId },
+    data: { status: StationStatus.COMPLETED, completedAt: new Date() },
   });
-  if (existing) {
-    throw Object.assign(
-      new Error('Sudah ada bypass request yang menunggu persetujuan'),
-      { status: 400 },
-    );
-  }
-
-  return prisma.bypassRequest.create({
-    data: { stationId, reason: reason.trim() },
-  });
+  await advanceOrderStage(tx, station.orderId, station.order.pickupRequestId, station.order.outletId, station.station, isPaid);
 };
 
-export const approveBypass = async (adminId: string, bypassId: string, adminNote?: string) => {
-  const bypass = await prisma.bypassRequest.findUnique({
-    where: { id: bypassId },
-    include: { station: { include: { order: { include: { payment: true } } } } },
+export const completeStation = async (workerId: string, stationId: string, items: ItemInput[]) => {
+  ensureItemsProvided(items);
+
+  const station = await prisma.orderStation.findUnique({
+    where: { id: stationId },
+    include: {
+      order: { include: { orderItems: true, orderStations: { include: { stationItems: true } }, payment: true } },
+    },
   });
+  ensureCanCompleteStation(station, workerId);
+  ensureItemsMatch(items, getReferenceItems(station!));
 
-  if (!bypass || bypass.status !== BypassStatus.PENDING) {
-    throw Object.assign(new Error('Bypass request tidak ditemukan'), { status: 404 });
-  }
-
-  const isPaid = bypass.station.order.payment?.status === 'PAID';
-  const next = nextStation[bypass.station.station];
-
-  await prisma.$transaction(async (tx) => {
-    await tx.bypassRequest.update({
-      where: { id: bypassId },
-      data: { status: BypassStatus.APPROVED, adminId, adminNote: adminNote ?? null, approvedAt: new Date() },
-    });
-
-    await tx.orderStation.update({
-      where: { id: bypass.stationId },
-      data: { status: StationStatus.BYPASSED, completedAt: new Date() },
-    });
-
-    if (bypass.station.station === StationName.PACKING) {
-      const newOrderStatus = isPaid ? OrderStatus.READY_TO_DELIVER : OrderStatus.WAITING_PAYMENT;
-      await tx.order.update({ where: { id: bypass.station.orderId }, data: { status: newOrderStatus } });
-    } else if (next) {
-      await tx.order.update({
-        where: { id: bypass.station.orderId },
-        data: { status: stationOrderStatus[next] },
-      });
-      await tx.orderStation.update({
-        where: { orderId_station: { orderId: bypass.station.orderId, station: next } },
-        data: { status: StationStatus.PENDING },
-      });
-    }
-  });
+  const isPaid = station!.order.payment?.status === 'PAID';
+  await prisma.$transaction((tx) => persistCompletion(tx, stationId, items, station!, isPaid));
 };
 
-export const rejectBypass = async (adminId: string, bypassId: string, adminNote: string) => {
-  if (!adminNote || adminNote.trim().length < 5) {
-    throw Object.assign(new Error('Keterangan penolakan wajib diisi'), { status: 400 });
-  }
-
-  const bypass = await prisma.bypassRequest.findUnique({ where: { id: bypassId } });
-  if (!bypass || bypass.status !== BypassStatus.PENDING) {
-    throw Object.assign(new Error('Bypass request tidak ditemukan'), { status: 404 });
-  }
-
-  return prisma.bypassRequest.update({
-    where: { id: bypassId },
-    data: { status: BypassStatus.REJECTED, adminId, adminNote: adminNote.trim() },
-  });
+const workerHistoryInclude = {
+  order: {
+    select: {
+      invoiceNumber: true,
+      pickupRequest: { select: { customer: { select: { name: true } } } },
+    },
+  },
+  stationItems: { include: { laundryItem: { select: { name: true } } } },
 };
 
 export const getWorkerHistory = async (workerId: string, query: Record<string, unknown>) => {
   const { page, limit, skip } = getPagination(query);
-
-  const where = {
-    workerId,
-    status: { in: [StationStatus.COMPLETED, StationStatus.BYPASSED] as StationStatus[] },
-  };
+  const where = { workerId, status: { in: [StationStatus.COMPLETED, StationStatus.BYPASSED] as StationStatus[] } };
 
   const [stations, total] = await prisma.$transaction([
-    prisma.orderStation.findMany({
-      where,
-      include: {
-        order: {
-          select: {
-            invoiceNumber: true,
-            pickupRequest: { select: { customer: { select: { name: true } } } },
-          },
-        },
-        stationItems: { include: { laundryItem: { select: { name: true } } } },
-      },
-      orderBy: { completedAt: 'desc' },
-      skip,
-      take: limit,
-    }),
+    prisma.orderStation.findMany({ where, include: workerHistoryInclude, orderBy: { completedAt: 'desc' }, skip, take: limit }),
     prisma.orderStation.count({ where }),
   ]);
 
-  return { stations, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { stations, meta: buildMeta(page, limit, total) };
 };

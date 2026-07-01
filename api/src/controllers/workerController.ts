@@ -2,12 +2,13 @@ import { Response } from 'express';
 import { StationName } from '@prisma/client';
 import { EmployeeRequest } from '../middleware/employeeGuard';
 import * as workerService from '../services/workerService';
+import * as bypassService from '../services/bypassService';
 
 export const getMyOrders = async (req: EmployeeRequest, res: Response): Promise<void> => {
   try {
-    const { outletId } = req.employee!;
+    const { id: workerId, outletId } = req.employee!;
     const station = req.query['station'] as StationName | undefined;
-    const result = await workerService.getMyOrders(outletId, req.query as Record<string, unknown>, station);
+    const result = await workerService.getMyOrders(outletId, req.query as Record<string, unknown>, workerId, station);
     res.json({ success: true, data: result.stations, meta: result.meta });
   } catch (error) {
     console.error('getMyOrders error:', error);
@@ -47,7 +48,7 @@ export const requestBypass = async (req: EmployeeRequest, res: Response): Promis
   try {
     const { stationId } = req.params as { stationId: string };
     const { reason } = req.body as { reason: string };
-    const bypass = await workerService.requestBypass(stationId, reason);
+    const bypass = await bypassService.requestBypass(stationId, reason);
     res.status(201).json({ success: true, message: 'Bypass request dikirim', data: bypass });
   } catch (error: any) {
     console.error('requestBypass error:', error);
@@ -59,8 +60,8 @@ export const approveBypass = async (req: EmployeeRequest, res: Response): Promis
   try {
     const { id: adminId } = req.employee!;
     const { bypassId } = req.params as { bypassId: string };
-    const { adminNote } = req.body as { adminNote?: string };
-    await workerService.approveBypass(adminId, bypassId, adminNote);
+    const { adminNote } = req.body as { adminNote: string };
+    await bypassService.approveBypass(adminId, bypassId, adminNote);
     res.json({ success: true, message: 'Bypass disetujui' });
   } catch (error: any) {
     console.error('approveBypass error:', error);
@@ -73,7 +74,7 @@ export const rejectBypass = async (req: EmployeeRequest, res: Response): Promise
     const { id: adminId } = req.employee!;
     const { bypassId } = req.params as { bypassId: string };
     const { adminNote } = req.body as { adminNote: string };
-    await workerService.rejectBypass(adminId, bypassId, adminNote);
+    await bypassService.rejectBypass(adminId, bypassId, adminNote);
     res.json({ success: true, message: 'Bypass ditolak' });
   } catch (error: any) {
     console.error('rejectBypass error:', error);

@@ -1,11 +1,13 @@
 import { Response } from 'express';
+import { StationName } from '@prisma/client';
 import { EmployeeRequest } from '../middleware/employeeGuard';
 import * as attendanceService from '../services/attendanceService';
 
 export const clockIn = async (req: EmployeeRequest, res: Response): Promise<void> => {
   try {
-    const { id: employeeId } = req.employee!;
-    const shift = await attendanceService.clockIn(employeeId);
+    const { id: employeeId, roles } = req.employee!;
+    const { station } = req.body as { station?: StationName };
+    const shift = await attendanceService.clockIn(employeeId, roles, station);
     res.status(201).json({ success: true, message: 'Clock-in berhasil', data: shift });
   } catch (error: any) {
     console.error('clockIn error:', error);

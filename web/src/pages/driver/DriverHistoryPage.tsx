@@ -59,7 +59,7 @@ export default function DriverHistoryPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Memuat...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Riwayat Driver</h1>
 
       <div className="flex bg-white rounded-xl shadow-sm mb-4 p-1">

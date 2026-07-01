@@ -1,6 +1,6 @@
 import { PickupStatus, DeliveryStatus, OrderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPagination } from '../utils/pagination';
+import { getPagination, buildMeta } from '../utils/pagination';
 
 const hasActiveOrder = async (driverId: string): Promise<boolean> => {
   const [activePickup, activeDelivery] = await prisma.$transaction([
@@ -10,7 +10,23 @@ const hasActiveOrder = async (driverId: string): Promise<boolean> => {
   return activePickup > 0 || activeDelivery > 0;
 };
 
+const ensureNoActiveOrder = async (driverId: string) => {
+  if (await hasActiveOrder(driverId)) {
+    throw Object.assign(new Error('Masih ada order aktif, selesaikan terlebih dahulu'), { status: 400 });
+  }
+};
+
 // ─── PICKUP ────────────────────────────────────────────────────────────────────
+
+const pickupListInclude = {
+  customer: { select: { name: true } },
+  address: { select: { label: true, fullAddress: true, latitude: true, longitude: true } },
+};
+
+const pickupHistoryInclude = {
+  customer: { select: { name: true } },
+  address: { select: { label: true, fullAddress: true } },
+};
 
 export const getAvailablePickups = async (outletId: string, query: Record<string, unknown>) => {
   const { page, limit, skip } = getPagination(query);
@@ -18,25 +34,16 @@ export const getAvailablePickups = async (outletId: string, query: Record<string
 
   const [pickups, total] = await prisma.$transaction([
     prisma.pickupRequest.findMany({
-      where,
-      include: {
-        customer: { select: { name: true } },
-        address: { select: { label: true, fullAddress: true, latitude: true, longitude: true } },
-      },
-      orderBy: { scheduledAt: 'asc' },
-      skip,
-      take: limit,
+      where, include: pickupListInclude, orderBy: { scheduledAt: 'asc' }, skip, take: limit,
     }),
     prisma.pickupRequest.count({ where }),
   ]);
 
-  return { pickups, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { pickups, meta: buildMeta(page, limit, total) };
 };
 
 export const acceptPickup = async (driverId: string, pickupId: string) => {
-  if (await hasActiveOrder(driverId)) {
-    throw Object.assign(new Error('Masih ada order aktif, selesaikan terlebih dahulu'), { status: 400 });
-  }
+  await ensureNoActiveOrder(driverId);
 
   const pickup = await prisma.pickupRequest.findUnique({ where: { id: pickupId } });
   if (!pickup || pickup.status !== PickupStatus.WAITING_DRIVER || pickup.driverId) {
@@ -64,10 +71,7 @@ export const arriveAtOutlet = async (driverId: string, pickupId: string) => {
 export const getActivePickup = async (driverId: string) => {
   return prisma.pickupRequest.findFirst({
     where: { driverId, status: PickupStatus.ON_THE_WAY },
-    include: {
-      customer: { select: { name: true } },
-      address: { select: { label: true, fullAddress: true, latitude: true, longitude: true } },
-    },
+    include: pickupListInclude,
   });
 };
 
@@ -77,22 +81,25 @@ export const getPickupHistory = async (driverId: string, query: Record<string, u
 
   const [pickups, total] = await prisma.$transaction([
     prisma.pickupRequest.findMany({
-      where,
-      include: {
-        customer: { select: { name: true } },
-        address: { select: { label: true, fullAddress: true } },
-      },
-      orderBy: { arrivedAtOutlet: 'desc' },
-      skip,
-      take: limit,
+      where, include: pickupHistoryInclude, orderBy: { arrivedAtOutlet: 'desc' }, skip, take: limit,
     }),
     prisma.pickupRequest.count({ where }),
   ]);
 
-  return { pickups, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { pickups, meta: buildMeta(page, limit, total) };
 };
 
 // ─── DELIVERY ──────────────────────────────────────────────────────────────────
+
+const deliveryListInclude = {
+  order: { select: { invoiceNumber: true, totalPrice: true } },
+  address: { select: { label: true, fullAddress: true, latitude: true, longitude: true } },
+};
+
+const deliveryHistoryInclude = {
+  order: { select: { invoiceNumber: true, totalPrice: true } },
+  address: { select: { label: true, fullAddress: true } },
+};
 
 export const getAvailableDeliveries = async (outletId: string, query: Record<string, unknown>) => {
   const { page, limit, skip } = getPagination(query);
@@ -100,25 +107,16 @@ export const getAvailableDeliveries = async (outletId: string, query: Record<str
 
   const [deliveries, total] = await prisma.$transaction([
     prisma.deliveryRequest.findMany({
-      where,
-      include: {
-        order: { select: { invoiceNumber: true, totalPrice: true } },
-        address: { select: { label: true, fullAddress: true, latitude: true, longitude: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-      skip,
-      take: limit,
+      where, include: deliveryListInclude, orderBy: { createdAt: 'asc' }, skip, take: limit,
     }),
     prisma.deliveryRequest.count({ where }),
   ]);
 
-  return { deliveries, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { deliveries, meta: buildMeta(page, limit, total) };
 };
 
 export const acceptDelivery = async (driverId: string, deliveryId: string) => {
-  if (await hasActiveOrder(driverId)) {
-    throw Object.assign(new Error('Masih ada order aktif, selesaikan terlebih dahulu'), { status: 400 });
-  }
+  await ensureNoActiveOrder(driverId);
 
   const delivery = await prisma.deliveryRequest.findUnique({ where: { id: deliveryId } });
   if (!delivery || delivery.status !== DeliveryStatus.WAITING_DRIVER || delivery.driverId) {
@@ -131,31 +129,32 @@ export const acceptDelivery = async (driverId: string, deliveryId: string) => {
   });
 };
 
-export const completeDelivery = async (driverId: string, deliveryId: string) => {
-  const delivery = await prisma.deliveryRequest.findUnique({ where: { id: deliveryId } });
+const ensureCanCompleteDelivery = (
+  delivery: { driverId: string | null; status: DeliveryStatus } | null,
+  driverId: string,
+) => {
   if (!delivery || delivery.driverId !== driverId || delivery.status !== DeliveryStatus.ON_THE_WAY) {
     throw Object.assign(new Error('Delivery tidak valid'), { status: 400 });
   }
+};
+
+export const completeDelivery = async (driverId: string, deliveryId: string) => {
+  const delivery = await prisma.deliveryRequest.findUnique({ where: { id: deliveryId } });
+  ensureCanCompleteDelivery(delivery, driverId);
 
   await prisma.$transaction([
     prisma.deliveryRequest.update({
       where: { id: deliveryId },
       data: { status: DeliveryStatus.DELIVERED, deliveredAt: new Date() },
     }),
-    prisma.order.update({
-      where: { id: delivery.orderId },
-      data: { status: OrderStatus.DELIVERED },
-    }),
+    prisma.order.update({ where: { id: delivery!.orderId }, data: { status: OrderStatus.DELIVERED } }),
   ]);
 };
 
 export const getActiveDelivery = async (driverId: string) => {
   return prisma.deliveryRequest.findFirst({
     where: { driverId, status: DeliveryStatus.ON_THE_WAY },
-    include: {
-      order: { select: { invoiceNumber: true, totalPrice: true } },
-      address: { select: { label: true, fullAddress: true, latitude: true, longitude: true } },
-    },
+    include: deliveryListInclude,
   });
 };
 
@@ -165,17 +164,10 @@ export const getDeliveryHistory = async (driverId: string, query: Record<string,
 
   const [deliveries, total] = await prisma.$transaction([
     prisma.deliveryRequest.findMany({
-      where,
-      include: {
-        order: { select: { invoiceNumber: true, totalPrice: true } },
-        address: { select: { label: true, fullAddress: true } },
-      },
-      orderBy: { deliveredAt: 'desc' },
-      skip,
-      take: limit,
+      where, include: deliveryHistoryInclude, orderBy: { deliveredAt: 'desc' }, skip, take: limit,
     }),
     prisma.deliveryRequest.count({ where }),
   ]);
 
-  return { deliveries, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+  return { deliveries, meta: buildMeta(page, limit, total) };
 };
