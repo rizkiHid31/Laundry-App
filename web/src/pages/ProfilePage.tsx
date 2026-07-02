@@ -4,9 +4,12 @@ import { useAuth } from '../context/AuthContext';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, updatePassword, updateEmail, uploadProfilePicture, resendVerificationEmail, logout } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [showPhotoForm, setShowPhotoForm] = useState(false);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -16,6 +19,9 @@ export default function ProfilePage() {
     province: user?.province || '',
     postalCode: user?.postalCode || '',
   });
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [emailData, setEmailData] = useState({ newEmail: user?.email || '' });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -59,6 +65,80 @@ export default function ProfilePage() {
     }
   };
 
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      if (passwordData.newPassword !== passwordData.confirmPassword) {
+        throw new Error('New passwords do not match');
+      }
+      await updatePassword(passwordData.currentPassword, passwordData.newPassword);
+      setSuccess('Password updated successfully');
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await updateEmail(emailData.newEmail);
+      setSuccess('Verification email sent to the new address');
+      setShowEmailForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhotoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      if (!photoFile) throw new Error('Please choose a photo');
+      await uploadProfilePicture(photoFile);
+      setSuccess('Profile picture uploaded successfully');
+      setShowPhotoForm(false);
+      setPhotoFile(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload photo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyEmail = async () => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await resendVerificationEmail(user.email);
+      setSuccess('Verification email sent');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send verification email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const profilePhoto = user.profilePicture || user.photoUrl;
+
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
       logout();
@@ -94,9 +174,9 @@ export default function ProfilePage() {
               {/* Profile Picture */}
               <div className="flex items-center gap-6 mb-8 pb-8 border-b">
                 <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center">
-                  {user.profilePicture ? (
+                  {profilePhoto ? (
                     <img
-                      src={user.profilePicture}
+                      src={profilePhoto}
                       alt={user.firstName}
                       className="w-24 h-24 rounded-full object-cover"
                     />
@@ -270,16 +350,95 @@ export default function ProfilePage() {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Account Settings</h3>
               <div className="space-y-2">
-                <button className="w-full text-left px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                  Change Password
+                <button
+                  onClick={() => {
+                    setShowPasswordForm((prev) => !prev);
+                    setShowEmailForm(false);
+                    setShowPhotoForm(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                >
+                  {showPasswordForm ? 'Hide Password Form' : 'Change Password'}
                 </button>
-                <button className="w-full text-left px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                  Update Email
+                <button
+                  onClick={() => {
+                    setShowEmailForm((prev) => !prev);
+                    setShowPasswordForm(false);
+                    setShowPhotoForm(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                >
+                  {showEmailForm ? 'Hide Email Form' : 'Update Email'}
                 </button>
-                <button className="w-full text-left px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                  Upload Profile Picture
+                <button
+                  onClick={() => {
+                    setShowPhotoForm((prev) => !prev);
+                    setShowPasswordForm(false);
+                    setShowEmailForm(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                >
+                  {showPhotoForm ? 'Hide Photo Form' : 'Upload Profile Picture'}
                 </button>
               </div>
+
+              {showPasswordForm && (
+                <form onSubmit={handlePasswordSubmit} className="mt-4 space-y-3">
+                  <input
+                    type="password"
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                    placeholder="Current password"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData((prev) => ({ ...prev, newPassword: e.target.value }))}
+                    placeholder="New password"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                  <input
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Confirm new password"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50">
+                    {loading ? 'Saving...' : 'Update Password'}
+                  </button>
+                </form>
+              )}
+
+              {showEmailForm && (
+                <form onSubmit={handleEmailSubmit} className="mt-4 space-y-3">
+                  <input
+                    type="email"
+                    value={emailData.newEmail}
+                    onChange={(e) => setEmailData({ newEmail: e.target.value })}
+                    placeholder="New email"
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50">
+                    {loading ? 'Sending...' : 'Send Verification'}
+                  </button>
+                </form>
+              )}
+
+              {showPhotoForm && (
+                <form onSubmit={handlePhotoSubmit} className="mt-4 space-y-3">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/gif"
+                    onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+                    className="w-full text-sm"
+                  />
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50">
+                    {loading ? 'Uploading...' : 'Upload Photo'}
+                  </button>
+                </form>
+              )}
             </div>
 
             {/* Verification Status */}
@@ -292,8 +451,8 @@ export default function ProfilePage() {
                 </span>
               </div>
               {!user.isVerified && (
-                <button className="w-full text-sm text-blue-600 hover:underline">
-                  Verify Email
+                <button onClick={handleVerifyEmail} disabled={loading} className="w-full text-sm text-blue-600 hover:underline disabled:opacity-50">
+                  {loading ? 'Sending...' : 'Verify Email'}
                 </button>
               )}
             </div>

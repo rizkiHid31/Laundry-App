@@ -31,10 +31,12 @@ export default function StationDetailPage() {
   const [showBypass, setShowBypass] = useState(false);
   const [bypassReason, setBypassReason] = useState('');
 
-  const h = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
   const fetchStation = useCallback(async () => {
-    const res = await fetch(`${API}/api/workers/orders?limit=100`, { headers: h });
+    if (!token || !stationId) return;
+
+    const res = await fetch(`${API}/api/workers/orders?limit=100`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    });
     const data = await res.json();
     const found: StationData | undefined = (data.data ?? []).find((s: StationData) => s.id === stationId);
     if (found) {
@@ -45,23 +47,47 @@ export default function StationDetailPage() {
         name: i.laundryItem.name,
       })));
     }
-    setLoading(false);
   }, [token, stationId]);
 
-  useEffect(() => { fetchStation(); }, [fetchStation]);
+  useEffect(() => {
+    let active = true;
+
+    const loadStation = async () => {
+      if (active) setLoading(true);
+      try {
+        await fetchStation();
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (token && stationId) {
+      void loadStation();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [token, stationId, fetchStation]);
 
   const updateQty = (laundryItemId: string, val: string) => {
     const num = Math.max(0, parseInt(val) || 0);
     setItems((prev) => prev.map((i) => i.laundryItemId === laundryItemId ? { ...i, quantityInput: num } : i));
   };
 
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+
   const handleComplete = async () => {
+    if (!token || !stationId) return;
     setSubmitting(true);
     setMessage('');
     setIsError(false);
     const res = await fetch(`${API}/api/workers/orders/${stationId}/complete`, {
       method: 'POST',
-      headers: h,
+      headers,
       body: JSON.stringify({ items }),
     });
     const data = await res.json();
@@ -77,6 +103,7 @@ export default function StationDetailPage() {
   };
 
   const handleBypass = async () => {
+    if (!token || !stationId) return;
     if (bypassReason.trim().length < 10) {
       setMessage('Alasan minimal 10 karakter');
       setIsError(true);
@@ -85,7 +112,7 @@ export default function StationDetailPage() {
     setSubmitting(true);
     const res = await fetch(`${API}/api/workers/orders/${stationId}/bypass`, {
       method: 'POST',
-      headers: h,
+      headers,
       body: JSON.stringify({ reason: bypassReason }),
     });
     const data = await res.json();

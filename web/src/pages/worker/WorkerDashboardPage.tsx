@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -26,7 +26,8 @@ const stationColor: Record<string, string> = {
 };
 
 export default function WorkerDashboardPage() {
-  const { token, user } = useAuth();
+  const navigate = useNavigate();
+  const { token, user, logout } = useAuth();
   const [stations, setStations] = useState<Station[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -34,36 +35,74 @@ export default function WorkerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
-  const h = { Authorization: `Bearer ${token}` };
-
   const fetchOrders = useCallback(async () => {
-    setLoading(true);
+    if (!token) return;
+
     const params = new URLSearchParams({ page: String(page), limit: '10' });
     if (stationFilter) params.set('station', stationFilter);
-    const res = await fetch(`${API}/api/workers/orders?${params}`, { headers: h });
+    const res = await fetch(`${API}/api/workers/orders?${params}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await res.json();
     setStations(data.data ?? []);
     setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-    setLoading(false);
   }, [token, page, stationFilter]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (active) setLoading(true);
+      try {
+        await fetchOrders();
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (token) {
+      void load();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [token, fetchOrders]);
 
   const startStation = async (stationId: string) => {
+    if (!token) return;
     setMessage('');
-    const res = await fetch(`${API}/api/workers/orders/${stationId}/start`, { method: 'POST', headers: h });
+    setLoading(true);
+    const res = await fetch(`${API}/api/workers/orders/${stationId}/start`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
     const data = await res.json();
     setMessage(data.message);
-    if (res.ok) fetchOrders();
+    if (res.ok) await fetchOrders();
+    setLoading(false);
   };
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard Worker</h1>
-      <p className="text-sm text-gray-500 mb-6">Halo, {user?.name ?? 'Worker'}</p>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard Worker</h1>
+        <button
+          onClick={handleLogout}
+          className="px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition"
+        >
+          Logout
+        </button>
+      </div>
+      <p className="text-sm text-gray-500 mb-6">Halo, {user?.name ?? ((`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()) || 'Worker')}</p>
 
       {message && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">{message}</div>

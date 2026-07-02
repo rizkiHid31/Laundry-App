@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsx ./src/app.ts",
-    "dev": "nodemon tsx app.ts",
+    "start": "node dist/app.js",
+    "dev": "nodemon --exec tsx ./src/app.ts",
     "postinstall": "prisma generate",
     "build": "npx prisma generate && npx prisma migrate deploy && tsc",
     "db:generate": "npx prisma generate",
@@ -25,7 +25,9 @@
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^6.9.8"
+    "nodemailer": "^6.9.8",
+    "opencage-api-client": "^2.1.2",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -34,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^25.9.0",
     "@types/nodemailer": "^6.4.14",
+    "nodemon": "^3.1.14",
     "prisma": "^7.8.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"

@@ -1,18 +1,10 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth';
-import {
-  register,
-  verifyEmailAndSetPassword,
-  resendVerificationEmail,
-  login,
-  requestResetPassword,
-  confirmResetPassword,
-  getCurrentUser,
-  updateProfile,
-  updatePassword,
-  updateEmail,
-  uploadProfilePicture,
-} from '../controllers/authController';
+import { register, verifyEmailAndSetPassword, resendVerificationEmail } from '../controllers/auth/register';
+import { login, getCurrentUser } from '../controllers/auth/session';
+import { requestResetPassword, confirmResetPassword, updatePassword } from '../controllers/auth/password';
+import { updateProfile, updateEmail, uploadProfilePicture } from '../controllers/auth/profile';
+import { redirectToGoogle, handleGoogleCallback } from '../controllers/auth/google';
 
 const router = express.Router();
 
@@ -20,6 +12,8 @@ const router = express.Router();
 router.post('/register', register as any);
 router.post('/verify-email', verifyEmailAndSetPassword as any);
 router.post('/resend-verification', resendVerificationEmail as any);
+router.get('/google', redirectToGoogle as any);
+router.get('/google/callback', handleGoogleCallback as any);
 router.post('/login', login as any);
 router.post('/request-reset-password', requestResetPassword as any);
 router.post('/confirm-reset-password', confirmResetPassword as any);

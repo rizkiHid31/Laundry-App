@@ -1,24 +1,8 @@
 import { Response } from 'express';
-import { StationStatus, StationName, OrderStatus, BypassStatus } from '@prisma/client';
+import { StationStatus, StationName, BypassStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { EmployeeRequest } from '../middleware/employeeGuard';
-
-const getPagination = (query: Record<string, unknown>) => {
-  const page = Math.max(1, parseInt(query['page'] as string) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(query['limit'] as string) || 10));
-  return { page, limit, skip: (page - 1) * limit };
-};
-
-const stationOrderStatus: Record<StationName, OrderStatus> = {
-  WASHING: OrderStatus.WASHING,
-  IRONING: OrderStatus.IRONING,
-  PACKING: OrderStatus.PACKING,
-};
-
-const nextStation: Partial<Record<StationName, StationName>> = {
-  WASHING: StationName.IRONING,
-  IRONING: StationName.PACKING,
-};
+import { advanceOrderAfterStation, finalizeStation, getPagination, getNextStation, markOrderReadyOrWaiting } from './workerController.helpers';
 
 type ItemInput = { laundryItemId: string; quantityInput: number };
 
@@ -119,7 +103,6 @@ export const completeStation = async (req: EmployeeRequest, res: Response): Prom
       return;
     }
 
-    // Tentukan referensi item dari station sebelumnya
     let referenceItems: ItemInput[];
     if (station.station === StationName.WASHING) {
       referenceItems = station.order.orderItems.map((i) => ({
@@ -145,52 +128,29 @@ export const completeStation = async (req: EmployeeRequest, res: Response): Prom
       return;
     }
 
-    // Semua cocok — simpan StationItems dan selesaikan
     const isPaid = station.order.payment?.status === 'PAID';
-    const next = nextStation[station.station];
+    const next = getNextStation(station.station);
 
     await prisma.$transaction(async (tx) => {
-      // Hapus item lama jika ada, lalu buat baru
       await tx.stationItem.deleteMany({ where: { stationId } });
       await tx.stationItem.createMany({
         data: items.map((i) => ({ stationId, laundryItemId: i.laundryItemId, quantityInput: i.quantityInput })),
       });
 
-      await tx.orderStation.update({
-        where: { id: stationId },
-        data: { status: StationStatus.COMPLETED, completedAt: new Date() },
-      });
+      await finalizeStation(tx as any, stationId, StationStatus.COMPLETED, new Date());
 
       if (station.station === StationName.PACKING) {
-        // Packing selesai: cek pembayaran
-        const newOrderStatus = isPaid ? OrderStatus.READY_TO_DELIVER : OrderStatus.WAITING_PAYMENT;
-        await tx.order.update({ where: { id: station.orderId }, data: { status: newOrderStatus } });
-
+        await markOrderReadyOrWaiting(tx as any, station.orderId, isPaid);
         if (isPaid) {
-          // Buat delivery request otomatis
-          const pickupReq = await tx.pickupRequest.findUnique({
-            where: { id: station.order.pickupRequestId },
-          });
+          const pickupReq = await tx.pickupRequest.findUnique({ where: { id: station.order.pickupRequestId } });
           if (pickupReq) {
             await tx.deliveryRequest.create({
-              data: {
-                orderId: station.orderId,
-                outletId: station.order.outletId,
-                addressId: pickupReq.addressId,
-                status: 'WAITING_DRIVER',
-              },
+              data: { orderId: station.orderId, outletId: station.order.outletId, addressId: pickupReq.addressId, status: 'WAITING_DRIVER' },
             });
           }
         }
       } else if (next) {
-        await tx.order.update({
-          where: { id: station.orderId },
-          data: { status: stationOrderStatus[next] },
-        });
-        await tx.orderStation.update({
-          where: { orderId_station: { orderId: station.orderId, station: next } },
-          data: { status: StationStatus.PENDING },
-        });
+        await advanceOrderAfterStation(tx as any, station.orderId, station.station);
       }
     });
 
@@ -253,7 +213,7 @@ export const approveBypass = async (req: EmployeeRequest, res: Response): Promis
     }
 
     const isPaid = bypass.station.order.payment?.status === 'PAID';
-    const next = nextStation[bypass.station.station];
+    const next = getNextStation(bypass.station.station);
 
     await prisma.$transaction(async (tx) => {
       await tx.bypassRequest.update({
@@ -261,23 +221,12 @@ export const approveBypass = async (req: EmployeeRequest, res: Response): Promis
         data: { status: BypassStatus.APPROVED, adminId, adminNote: adminNote ?? null, approvedAt: new Date() },
       });
 
-      await tx.orderStation.update({
-        where: { id: bypass.stationId },
-        data: { status: StationStatus.BYPASSED, completedAt: new Date() },
-      });
+      await finalizeStation(tx as any, bypass.stationId, StationStatus.BYPASSED, new Date());
 
       if (bypass.station.station === StationName.PACKING) {
-        const newOrderStatus = isPaid ? OrderStatus.READY_TO_DELIVER : OrderStatus.WAITING_PAYMENT;
-        await tx.order.update({ where: { id: bypass.station.orderId }, data: { status: newOrderStatus } });
+        await markOrderReadyOrWaiting(tx as any, bypass.station.orderId, isPaid);
       } else if (next) {
-        await tx.order.update({
-          where: { id: bypass.station.orderId },
-          data: { status: stationOrderStatus[next] },
-        });
-        await tx.orderStation.update({
-          where: { orderId_station: { orderId: bypass.station.orderId, station: next } },
-          data: { status: StationStatus.PENDING },
-        });
+        await advanceOrderAfterStation(tx as any, bypass.station.orderId, bypass.station.station);
       }
     });
 

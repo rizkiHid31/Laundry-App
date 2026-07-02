@@ -4,7 +4,6 @@ export default function Footer() {
       {/* Main Footer Content */}
       <div className="px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-6">
-          {/* Brand Section */}
           <div>
             <h3 className="text-xl font-bold text-white mb-4">LaundryApp</h3>
             <p className="text-sm sm:text-base text-gray-400">
@@ -31,8 +30,6 @@ export default function Footer() {
               </a>
             </div>
           </div>
-
-          {/* Services */}
           <div>
             <h4 className="text-white font-semibold mb-4 text-sm sm:text-base">Services</h4>
             <ul className="space-y-2 text-sm sm:text-base">
@@ -58,8 +55,6 @@ export default function Footer() {
               </li>
             </ul>
           </div>
-
-          {/* Company */}
           <div>
             <h4 className="text-white font-semibold mb-4 text-sm sm:text-base">Company</h4>
             <ul className="space-y-2 text-sm sm:text-base">
@@ -85,8 +80,6 @@ export default function Footer() {
               </li>
             </ul>
           </div>
-
-          {/* Support */}
           <div>
             <h4 className="text-white font-semibold mb-4 text-sm sm:text-base">Support</h4>
             <ul className="space-y-2 text-sm sm:text-base">
@@ -113,16 +106,12 @@ export default function Footer() {
             </ul>
           </div>
         </div>
-
-        {/* Divider */}
         <div className="border-t border-gray-800 mt-8 sm:mt-12 pt-8 sm:pt-12">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-0">
             {/* Copyright */}
             <div className="text-center sm:text-left text-sm text-gray-400">
               <p>&copy; 2026 LaundryApp. All rights reserved.</p>
             </div>
-
-            {/* Payment Methods */}
             <div className="text-center sm:text-right">
               <p className="text-xs sm:text-sm text-gray-400 mb-2">Accepted Payment Methods</p>
               <div className="flex justify-center sm:justify-end gap-3">

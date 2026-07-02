@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -18,34 +19,53 @@ interface Meta {
 }
 
 export default function AttendancePage() {
-  const { token } = useAuth();
+  const navigate = useNavigate();
+  const { token, logout } = useAuth();
   const [today, setToday] = useState<Shift | null>(null);
   const [history, setHistory] = useState<Shift[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const authHeader = { Authorization: `Bearer ${token}` };
+  const refreshData = useCallback(async () => {
+    if (!token) return;
 
-  const fetchToday = useCallback(async () => {
-    const res = await fetch(`${API}/api/attendance/today`, { headers: authHeader });
-    const data = await res.json();
-    setToday(data.data);
-  }, [token]);
+    const todayResponse = await fetch(`${API}/api/attendance/today`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const todayData = await todayResponse.json();
+    setToday(todayData.data);
 
-  const fetchHistory = useCallback(async () => {
-    const res = await fetch(`${API}/api/attendance/my?page=${page}&limit=10`, { headers: authHeader });
-    const data = await res.json();
-    setHistory(data.data ?? []);
-    setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
+    const historyResponse = await fetch(`${API}/api/attendance/my?page=${page}&limit=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const historyData = await historyResponse.json();
+    setHistory(historyData.data ?? []);
+    setMeta(historyData.meta ?? { page: 1, totalPages: 1, total: 0 });
   }, [token, page]);
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchToday(), fetchHistory()]).finally(() => setLoading(false));
-  }, [fetchToday, fetchHistory]);
+    let active = true;
+
+    const load = async () => {
+      if (active) setLoading(true);
+      try {
+        await refreshData();
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (token) {
+      void load();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [token, refreshData]);
 
   const handleAction = async (action: 'clock-in' | 'clock-out') => {
     setActionLoading(true);
@@ -53,13 +73,12 @@ export default function AttendancePage() {
     try {
       const res = await fetch(`${API}/api/attendance/${action}`, {
         method: 'POST',
-        headers: authHeader,
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       setMessage(data.message);
       if (res.ok) {
-        await fetchToday();
-        await fetchHistory();
+        await refreshData();
       }
     } catch {
       setMessage('Terjadi kesalahan');
@@ -80,13 +99,26 @@ export default function AttendancePage() {
     return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${map[s]}`}>{label[s]}</span>;
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">Memuat...</p></div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Absensi</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Absensi</h1>
+        <button
+          onClick={handleLogout}
+          className="px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition"
+        >
+          Logout
+        </button>
+      </div>
 
       {/* Status Hari Ini */}
       <div className="bg-white rounded-xl shadow-sm p-5 mb-6">

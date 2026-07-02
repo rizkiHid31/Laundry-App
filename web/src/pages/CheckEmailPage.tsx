@@ -1,9 +1,14 @@
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 
+type LocationState = {
+  email?: string;
+};
+
 export default function CheckEmailPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const email = (location.state as any)?.email || '';
+  const state = location.state as LocationState | null;
+  const email = state?.email ?? '';
 
   if (!email) {
     return (
@@ -30,9 +35,7 @@ export default function CheckEmailPage() {
         <h1 className="text-3xl font-bold text-gray-900 mb-3">Check Your Email</h1>
 
         <div className="mb-6">
-          <p className="text-gray-600 mb-2">
-            We've sent a verification email to:
-          </p>
+          <p className="text-gray-600 mb-2">We've sent a verification email to:</p>
           <p className="text-lg font-semibold text-blue-600 break-all">{email}</p>
         </div>
 
@@ -47,9 +50,7 @@ export default function CheckEmailPage() {
         </div>
 
         <div className="mb-6">
-          <p className="text-sm text-gray-600">
-            The verification link will expire in 1 hour.
-          </p>
+          <p className="text-sm text-gray-600">The verification link will expire in 1 hour.</p>
         </div>
 
         <div className="space-y-3">

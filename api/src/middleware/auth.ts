@@ -27,7 +27,7 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(500).json({
+    res.status(401).json({
       success: false,
       message: 'Authentication error',
     });

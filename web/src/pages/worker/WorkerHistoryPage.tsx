@@ -32,17 +32,41 @@ export default function WorkerHistoryPage() {
   const [loading, setLoading] = useState(true);
 
   const fetchHistory = useCallback(async () => {
-    setLoading(true);
+    if (!token) return;
+
     const res = await fetch(`${API}/api/workers/history?page=${page}&limit=10`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
     setRecords(data.data ?? []);
     setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-    setLoading(false);
   }, [token, page]);
 
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      if (active) setLoading(true);
+      try {
+        await fetchHistory();
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (token) {
+      void load();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [token, fetchHistory]);
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });

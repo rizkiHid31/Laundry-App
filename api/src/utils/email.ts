@@ -1,20 +1,78 @@
 import nodemailer from 'nodemailer';
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
+const isPlaceholderEmailConfig = () => {
+  const service = process.env.EMAIL_SERVICE?.trim();
+  const host = process.env.EMAIL_HOST?.trim();
+  const user = process.env.EMAIL_USER?.trim();
+  const pass = process.env.EMAIL_PASSWORD?.trim();
+
+  return (
+    !user ||
+    !pass ||
+    user.includes('your-email') ||
+    pass.includes('your-app') ||
+    (!service && !host)
+  );
+};
+
+const emailConfigured = !isPlaceholderEmailConfig();
+
+const createSmtpTransport = () => {
+  const transportOptions: any = {
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  };
+
+  const service = process.env.EMAIL_SERVICE?.trim();
+  const host = process.env.EMAIL_HOST?.trim();
+  const port = process.env.EMAIL_PORT?.trim();
+
+  if (service) {
+    transportOptions.service = service;
+  }
+
+  if (host) {
+    transportOptions.host = host;
+  }
+
+  if (port) {
+    transportOptions.port = parseInt(port, 10);
+    transportOptions.secure = port === '465';
+  }
+
+  return nodemailer.createTransport(transportOptions);
+};
+
+const transporter = emailConfigured ? createSmtpTransport() : null;
+
+if (emailConfigured && transporter && 'verify' in transporter) {
+  transporter.verify((error) => {
+    if (error) {
+      console.error('[EMAIL] SMTP verification failed:', error);
+      console.error('[EMAIL] Please check EMAIL_SERVICE, EMAIL_USER, EMAIL_PASSWORD, and EMAIL_HOST/EMAIL_PORT settings.');
+    } else {
+      console.info('[EMAIL] SMTP transporter is ready to send messages.');
+    }
+  });
+}
+
+export const isEmailConfigured = (): boolean => emailConfigured;
 
 export const sendVerificationEmail = async (
   email: string,
   firstName: string,
   verificationToken: string
 ): Promise<boolean> => {
+  if (!emailConfigured || !transporter) {
+    console.warn('[EMAIL] SMTP is not configured. Verification email was not sent.');
+    return false;
+  }
+
   try {
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
 
@@ -48,6 +106,11 @@ export const sendResetPasswordEmail = async (
   firstName: string,
   resetToken: string
 ): Promise<boolean> => {
+  if (!emailConfigured || !transporter) {
+    console.warn('[EMAIL] SMTP is not configured. Reset password email was not sent.');
+    return false;
+  }
+
   try {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 

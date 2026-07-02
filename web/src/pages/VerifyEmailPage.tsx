@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+type LocationState = {
+  email?: string;
+};
+
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -9,7 +13,8 @@ export default function VerifyEmailPage() {
   const { verifyEmail, resendVerificationEmail } = useAuth();
 
   const token = searchParams.get('token');
-  const email = (location.state as any)?.email || '';
+  const state = location.state as LocationState | null;
+  const email = state?.email ?? '';
 
   const [formData, setFormData] = useState({
     password: '',
@@ -29,7 +34,7 @@ export default function VerifyEmailPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,10 +62,7 @@ export default function VerifyEmailPage() {
       await verifyEmail(token, formData.password);
       setSuccess(true);
       setFormData({ password: '', confirmPassword: '' });
-
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
+      setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
@@ -75,7 +77,6 @@ export default function VerifyEmailPage() {
 
     try {
       await resendVerificationEmail(manualEmail);
-      setError('');
       alert('Verification email resent. Please check your email.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resend email');
@@ -94,9 +95,7 @@ export default function VerifyEmailPage() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Email Verified!</h2>
-          <p className="text-gray-600 mb-4">
-            Your email has been verified successfully. You can now login with your new password.
-          </p>
+          <p className="text-gray-600 mb-4">Your email has been verified successfully. You can now login with your new password.</p>
           <p className="text-sm text-gray-500">Redirecting to login page...</p>
         </div>
       </div>
@@ -128,9 +127,8 @@ export default function VerifyEmailPage() {
                 onChange={handleChange}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="••••••••"
+                placeholder="Enter your new password"
               />
-              <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
             </div>
 
             <div>
@@ -142,7 +140,7 @@ export default function VerifyEmailPage() {
                 onChange={handleChange}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="••••••••"
+                placeholder="Confirm your new password"
               />
             </div>
 
@@ -151,48 +149,31 @@ export default function VerifyEmailPage() {
               disabled={loading}
               className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Verifying...' : 'Verify & Set Password'}
+              {loading ? 'Verifying...' : 'Verify Email'}
             </button>
           </form>
         ) : (
           <form onSubmit={handleResendEmail} className="space-y-4">
             <div>
-              <label className="block text-gray-700 font-medium mb-2">Email Address</label>
+              <label className="block text-gray-700 font-medium mb-2">Email</label>
               <input
                 type="email"
                 value={manualEmail}
                 onChange={(e) => setManualEmail(e.target.value)}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="your@email.com"
+                placeholder="you@example.com"
               />
             </div>
-
             <button
               type="submit"
               disabled={resendLoading}
               className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {resendLoading ? 'Sending...' : 'Resend Verification Email'}
+              {resendLoading ? 'Resending...' : 'Resend Verification'}
             </button>
           </form>
         )}
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Didn't receive the email? Check your spam folder or
-            {token ? (
-              <span className="text-blue-600 font-semibold"> try again later</span>
-            ) : (
-              <button
-                onClick={() => window.location.reload()}
-                className="text-blue-600 font-semibold hover:underline ml-1"
-              >
-                refresh the page
-              </button>
-            )}
-          </p>
-        </div>
       </div>
     </div>
   );

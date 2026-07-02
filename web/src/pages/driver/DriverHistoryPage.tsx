@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -19,6 +19,35 @@ interface DeliveryRecord {
 
 interface Meta { page: number; totalPages: number; total: number; }
 
+interface PaginationProps {
+  meta: Meta;
+  onPage: (p: number) => void;
+}
+
+function Pagination({ meta, onPage }: PaginationProps) {
+  if (meta.totalPages <= 1) return null;
+
+  return (
+    <div className="flex justify-center gap-2 mt-4">
+      <button
+        onClick={() => onPage(Math.max(1, meta.page - 1))}
+        disabled={meta.page === 1}
+        className="px-3 py-1 text-sm border rounded disabled:opacity-40"
+      >
+        Prev
+      </button>
+      <span className="px-3 py-1 text-sm text-gray-600">{meta.page} / {meta.totalPages}</span>
+      <button
+        onClick={() => onPage(Math.min(meta.totalPages, meta.page + 1))}
+        disabled={meta.page === meta.totalPages}
+        className="px-3 py-1 text-sm border rounded disabled:opacity-40"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 export default function DriverHistoryPage() {
   const { token } = useAuth();
   const [tab, setTab] = useState<'pickup' | 'delivery'>('pickup');
@@ -30,38 +59,45 @@ export default function DriverHistoryPage() {
   const [deliveryPage, setDeliveryPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const h = { Authorization: `Bearer ${token}` };
-
-  const fetchPickups = useCallback(async () => {
-    const res = await fetch(`${API}/api/drivers/pickups/history?page=${pickupPage}&limit=10`, { headers: h });
-    const data = await res.json();
-    setPickups(data.data ?? []);
-    setPickupMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-  }, [token, pickupPage]);
-
-  const fetchDeliveries = useCallback(async () => {
-    const res = await fetch(`${API}/api/drivers/deliveries/history?page=${deliveryPage}&limit=10`, { headers: h });
-    const data = await res.json();
-    setDeliveries(data.data ?? []);
-    setDeliveryMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-  }, [token, deliveryPage]);
-
   useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchPickups(), fetchDeliveries()]).finally(() => setLoading(false));
-  }, [fetchPickups, fetchDeliveries]);
+    let active = true;
+
+    const load = async () => {
+      if (!token) {
+        if (active) setLoading(false);
+        return;
+      }
+
+      if (active) setLoading(true);
+      try {
+        const pickupsResponse = await fetch(`${API}/api/drivers/pickups/history?page=${pickupPage}&limit=10`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const pickupsData = await pickupsResponse.json();
+        const deliveriesResponse = await fetch(`${API}/api/drivers/deliveries/history?page=${deliveryPage}&limit=10`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const deliveriesData = await deliveriesResponse.json();
+
+        if (!active) return;
+        setPickups(pickupsData.data ?? []);
+        setPickupMeta(pickupsData.meta ?? { page: 1, totalPages: 1, total: 0 });
+        setDeliveries(deliveriesData.data ?? []);
+        setDeliveryMeta(deliveriesData.meta ?? { page: 1, totalPages: 1, total: 0 });
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [token, pickupPage, deliveryPage]);
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-  const Pagination = ({ meta, onPage }: { meta: Meta; onPage: (p: number) => void }) =>
-    meta.totalPages > 1 ? (
-      <div className="flex justify-center gap-2 mt-4">
-        <button onClick={() => onPage(Math.max(1, meta.page - 1))} disabled={meta.page === 1} className="px-3 py-1 text-sm border rounded disabled:opacity-40">Prev</button>
-        <span className="px-3 py-1 text-sm text-gray-600">{meta.page} / {meta.totalPages}</span>
-        <button onClick={() => onPage(Math.min(meta.totalPages, meta.page + 1))} disabled={meta.page === meta.totalPages} className="px-3 py-1 text-sm border rounded disabled:opacity-40">Next</button>
-      </div>
-    ) : null;
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Memuat...</div>;
 

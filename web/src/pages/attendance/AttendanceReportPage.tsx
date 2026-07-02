@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -24,29 +24,46 @@ export default function AttendanceReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchReport = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
+  useEffect(() => {
+    let active = true;
 
-      const res = await fetch(`${API}/api/attendance/report?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
-      setRecords(data.data ?? []);
-      setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-    } catch {
-      setError('Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
+    const loadReport = async () => {
+      if (active) {
+        setLoading(true);
+        setError('');
+      }
+
+      try {
+        const params = new URLSearchParams({ page: String(page), limit: '20' });
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo) params.set('dateTo', dateTo);
+
+        const res = await fetch(`${API}/api/attendance/report?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (!active) return;
+        if (!res.ok) {
+          setError(data.message);
+          return;
+        }
+
+        setRecords(data.data ?? []);
+        setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
+      } catch {
+        if (active) setError('Gagal memuat data');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadReport();
+
+    return () => {
+      active = false;
+    };
   }, [token, page, dateFrom, dateTo]);
-
-  useEffect(() => { fetchReport(); }, [fetchReport]);
 
   const fmt = (iso: string | null) =>
     iso ? new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';

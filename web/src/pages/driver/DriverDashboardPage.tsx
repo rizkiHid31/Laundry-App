@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -20,48 +21,82 @@ interface Delivery {
 }
 
 export default function DriverDashboardPage() {
-  const { token } = useAuth();
+  const navigate = useNavigate();
+  const { token, logout } = useAuth();
   const [activePickup, setActivePickup] = useState<Pickup | null>(null);
   const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
   const [availPickups, setAvailPickups] = useState<Pickup[]>([]);
   const [availDeliveries, setAvailDeliveries] = useState<Delivery[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const h = { Authorization: `Bearer ${token}` };
-
   const fetchAll = useCallback(async () => {
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
     const [ap, ad, vp, vd] = await Promise.all([
-      fetch(`${API}/api/drivers/pickups/active`, { headers: h }).then((r) => r.json()),
-      fetch(`${API}/api/drivers/deliveries/active`, { headers: h }).then((r) => r.json()),
-      fetch(`${API}/api/drivers/pickups/available`, { headers: h }).then((r) => r.json()),
-      fetch(`${API}/api/drivers/deliveries/available`, { headers: h }).then((r) => r.json()),
+      fetch(`${API}/api/drivers/pickups/active`, { headers }).then((r) => r.json()),
+      fetch(`${API}/api/drivers/deliveries/active`, { headers }).then((r) => r.json()),
+      fetch(`${API}/api/drivers/pickups/available`, { headers }).then((r) => r.json()),
+      fetch(`${API}/api/drivers/deliveries/available`, { headers }).then((r) => r.json()),
     ]);
+
     setActivePickup(ap.data ?? null);
     setActiveDelivery(ad.data ?? null);
     setAvailPickups(vp.data ?? []);
     setAvailDeliveries(vd.data ?? []);
-    setLoading(false);
   }, [token]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      if (active) setLoading(true);
+      try {
+        await fetchAll();
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    if (token) {
+      void load();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [token, fetchAll]);
 
   const action = async (url: string, method = 'POST') => {
+    if (!token) return;
     setMessage('');
-    const res = await fetch(`${API}${url}`, { method, headers: h });
+    const res = await fetch(`${API}${url}`, { method, headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json();
     setMessage(data.message);
-    if (res.ok) fetchAll();
+    if (res.ok) await fetchAll();
   };
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Memuat...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard Driver</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard Driver</h1>
+        <button
+          onClick={handleLogout}
+          className="px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition"
+        >
+          Logout
+        </button>
+      </div>
 
       {message && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">{message}</div>
