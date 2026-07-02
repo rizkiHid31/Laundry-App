@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../lib/api';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+type Station = 'WASHING' | 'IRONING' | 'PACKING';
 
 interface Shift {
   id: string;
@@ -9,7 +10,10 @@ interface Shift {
   checkIn: string | null;
   checkOut: string | null;
   status: 'ABSENT' | 'PRESENT' | 'COMPLETED';
+  station: Station | null;
 }
+
+const stationLabel: Record<Station, string> = { WASHING: 'Cuci', IRONING: 'Setrika', PACKING: 'Packing' };
 
 interface Meta {
   page: number;
@@ -18,29 +22,28 @@ interface Meta {
 }
 
 export default function AttendancePage() {
-  const { token } = useAuth();
+  const { user } = useAuth();
+  const isWorker = (user?.userRoles ?? []).some((ur) => ur.role.name === 'worker');
+
   const [today, setToday] = useState<Shift | null>(null);
   const [history, setHistory] = useState<Shift[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
+  const [station, setStation] = useState<Station>('WASHING');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const authHeader = { Authorization: `Bearer ${token}` };
-
   const fetchToday = useCallback(async () => {
-    const res = await fetch(`${API}/api/attendance/today`, { headers: authHeader });
-    const data = await res.json();
-    setToday(data.data);
-  }, [token]);
+    const res = await api.get('/api/attendance/today');
+    setToday(res.data.data);
+  }, []);
 
   const fetchHistory = useCallback(async () => {
-    const res = await fetch(`${API}/api/attendance/my?page=${page}&limit=10`, { headers: authHeader });
-    const data = await res.json();
-    setHistory(data.data ?? []);
-    setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-  }, [token, page]);
+    const res = await api.get('/api/attendance/my', { params: { page, limit: 10 } });
+    setHistory(res.data.data ?? []);
+    setMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
+  }, [page]);
 
   useEffect(() => {
     setLoading(true);
@@ -51,18 +54,13 @@ export default function AttendancePage() {
     setActionLoading(true);
     setMessage('');
     try {
-      const res = await fetch(`${API}/api/attendance/${action}`, {
-        method: 'POST',
-        headers: authHeader,
-      });
-      const data = await res.json();
-      setMessage(data.message);
-      if (res.ok) {
-        await fetchToday();
-        await fetchHistory();
-      }
-    } catch {
-      setMessage('Terjadi kesalahan');
+      const body = action === 'clock-in' && isWorker ? { station } : undefined;
+      const res = await api.post(`/api/attendance/${action}`, body);
+      setMessage(res.data.message);
+      await fetchToday();
+      await fetchHistory();
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || 'Terjadi kesalahan');
     } finally {
       setActionLoading(false);
     }
@@ -85,7 +83,7 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Absensi</h1>
 
       {/* Status Hari Ini */}
@@ -101,6 +99,32 @@ export default function AttendancePage() {
             <p className="text-xl font-bold text-green-800">{fmt(today?.checkOut ?? null)}</p>
           </div>
         </div>
+
+        {isWorker && !today?.checkIn && (
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 mb-2">Station kerja hari ini</p>
+            <div className="flex gap-2">
+              {(['WASHING', 'IRONING', 'PACKING'] as Station[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStation(s)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+                    station === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {stationLabel[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isWorker && today?.checkIn && today.station && (
+          <p className="text-xs text-gray-500 mb-4">
+            Station hari ini: <span className="font-semibold text-gray-700">{stationLabel[today.station]}</span>
+          </p>
+        )}
 
         {message && (
           <p className="text-sm text-center mb-3 text-blue-600">{message}</p>
@@ -136,7 +160,9 @@ export default function AttendancePage() {
             {history.map((s) => (
               <li key={s.id} className="py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{fmtDate(s.shiftDate)}</p>
+                  <p className="text-sm font-medium text-gray-800">
+                    {fmtDate(s.shiftDate)} {s.station && <span className="text-gray-400 font-normal">· {stationLabel[s.station]}</span>}
+                  </p>
                   <p className="text-xs text-gray-500">In: {fmt(s.checkIn)} · Out: {fmt(s.checkOut)}</p>
                 </div>
                 {statusBadge(s.status)}

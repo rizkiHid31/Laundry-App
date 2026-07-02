@@ -10,39 +10,40 @@ export interface EmployeeRequest extends AuthRequest {
   };
 }
 
-export const employeeGuard = async (
-  req: EmployeeRequest,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
+const findActiveEmployee = async (userId: string) => {
+  return prisma.outletEmployee.findFirst({
+    where: { userId, isActive: true },
+    include: { user: { include: { userRoles: { include: { role: true } } } } },
+  });
+};
+
+const resolveEmployeeOrRespond = async (req: EmployeeRequest, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ success: false, message: 'Unauthorized' });
+    return null;
+  }
+  const employee = await findActiveEmployee(req.user.userId);
+  if (!employee) {
+    res.status(403).json({ success: false, message: 'Bukan karyawan aktif' });
+    return null;
+  }
+  return employee;
+};
+
+type ActiveEmployee = NonNullable<Awaited<ReturnType<typeof resolveEmployeeOrRespond>>>;
+
+const toEmployeeContext = (employee: ActiveEmployee) => ({
+  id: employee.id,
+  outletId: employee.outletId,
+  roles: employee.user.userRoles.map((ur) => ur.role.name),
+});
+
+export const employeeGuard = async (req: EmployeeRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ success: false, message: 'Unauthorized' });
-      return;
-    }
+    const employee = await resolveEmployeeOrRespond(req, res);
+    if (!employee) return;
 
-    const employee = await prisma.outletEmployee.findFirst({
-      where: { userId: req.user.userId, isActive: true },
-      include: {
-        user: {
-          include: {
-            userRoles: { include: { role: true } },
-          },
-        },
-      },
-    });
-
-    if (!employee) {
-      res.status(403).json({ success: false, message: 'Bukan karyawan aktif' });
-      return;
-    }
-
-    req.employee = {
-      id: employee.id,
-      outletId: employee.outletId,
-      roles: employee.user.userRoles.map((ur) => ur.role.name),
-    };
-
+    req.employee = toEmployeeContext(employee);
     next();
   } catch (error) {
     next(error);

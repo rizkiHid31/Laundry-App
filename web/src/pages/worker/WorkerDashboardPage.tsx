@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface OrderItem { laundryItem: { name: string; unit: string }; quantity: number; }
 interface Station {
@@ -26,7 +25,7 @@ const stationColor: Record<string, string> = {
 };
 
 export default function WorkerDashboardPage() {
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const [stations, setStations] = useState<Station[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -34,36 +33,41 @@ export default function WorkerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
-  const h = { Authorization: `Bearer ${token}` };
-
   const fetchOrders = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ page: String(page), limit: '10' });
-    if (stationFilter) params.set('station', stationFilter);
-    const res = await fetch(`${API}/api/workers/orders?${params}`, { headers: h });
-    const data = await res.json();
-    setStations(data.data ?? []);
-    setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
+    const params: Record<string, string> = { page: String(page), limit: '10' };
+    if (stationFilter) params['station'] = stationFilter;
+    const res = await api.get('/api/workers/orders', { params });
+    setStations(res.data.data ?? []);
+    setMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
     setLoading(false);
-  }, [token, page, stationFilter]);
+  }, [page, stationFilter]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   const startStation = async (stationId: string) => {
     setMessage('');
-    const res = await fetch(`${API}/api/workers/orders/${stationId}/start`, { method: 'POST', headers: h });
-    const data = await res.json();
-    setMessage(data.message);
-    if (res.ok) fetchOrders();
+    try {
+      const res = await api.post(`/api/workers/orders/${stationId}/start`);
+      setMessage(res.data.message);
+      fetchOrders();
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || 'Terjadi kesalahan');
+    }
   };
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Dashboard Worker</h1>
-      <p className="text-sm text-gray-500 mb-6">Halo, {user?.name ?? 'Worker'}</p>
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
+      <div className="flex justify-between items-center mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard Worker</h1>
+        <Link to="/worker/history" className="text-sm text-blue-600 font-medium hover:underline">
+          Riwayat →
+        </Link>
+      </div>
+      <p className="text-sm text-gray-500 mb-6">Halo, {user?.firstName ?? 'Worker'}</p>
 
       {message && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">{message}</div>

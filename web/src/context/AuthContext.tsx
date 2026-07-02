@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../lib/api';
 
 export interface User {
   id: string;
@@ -14,6 +15,7 @@ export interface User {
   role: string;
   isVerified: boolean;
   loginProvider: string;
+  userRoles?: Array<{ role: { name: string; scope: string } }>;
 }
 
 interface AuthContextType {
@@ -24,7 +26,7 @@ interface AuthContextType {
   register: (email: string, firstName: string, lastName?: string) => Promise<void>;
   verifyEmail: (token: string, password: string) => Promise<void>;
   resendVerificationEmail: (email: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<string[]>;
   logout: () => void;
   requestResetPassword: (email: string) => Promise<void>;
   confirmResetPassword: (token: string, password: string) => Promise<void>;
@@ -36,101 +38,75 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Load token from localStorage on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
       setToken(savedToken);
-      getCurrentUserData(savedToken);
+      fetchCurrentUser();
     } else {
       setLoading(false);
     }
   }, []);
 
-  const getCurrentUserData = async (authToken: string) => {
+  const fetchCurrentUser = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.data);
-      } else {
-        localStorage.removeItem('token');
-        setToken(null);
-      }
-    } catch (error) {
-      console.error('Failed to get user:', error);
+      const res = await api.get('/api/auth/me');
+      setUser(res.data.data);
+    } catch {
+      localStorage.removeItem('token');
+      setToken(null);
     } finally {
       setLoading(false);
     }
   };
 
   const register = async (email: string, firstName: string, lastName?: string) => {
-    const response = await fetch(`${API_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, firstName, lastName }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Registration failed');
+    try {
+      const name = [firstName, lastName].filter(Boolean).join(' ');
+      await api.post('/api/auth/register', { email, name });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Registration failed');
     }
   };
 
   const verifyEmail = async (token: string, password: string) => {
-    const response = await fetch(`${API_URL}/api/auth/verify-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Verification failed');
+    try {
+      await api.post('/api/auth/verify-email', { token, password });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Verification failed');
     }
   };
 
   const resendVerificationEmail = async (email: string) => {
-    const response = await fetch(`${API_URL}/api/auth/resend-verification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to resend verification email');
+    try {
+      await api.post('/api/auth/resend-verification', { email });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to resend verification email');
     }
   };
 
-  const login = async (email: string, password: string) => {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+  const login = async (email: string, password: string): Promise<string[]> => {
+    try {
+      const res = await api.post('/api/auth/login', { email, password });
+      const { token: newToken } = res.data.data;
+      setToken(newToken);
+      localStorage.setItem('token', newToken);
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Login failed');
+      // Fetch full profile (includes outlet-scoped roles like driver/worker,
+      // which the login response's flat `role` field omits).
+      const meRes = await api.get('/api/auth/me');
+      const fullUser: User = meRes.data.data;
+      setUser(fullUser);
+
+      return (fullUser.userRoles ?? []).map((ur) => ur.role.name);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Login failed');
     }
-
-    const data = await response.json();
-    setToken(data.data.token);
-    setUser(data.data.user);
-    localStorage.setItem('token', data.data.token);
   };
 
   const logout = () => {
@@ -140,91 +116,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const requestResetPassword = async (email: string) => {
-    const response = await fetch(`${API_URL}/api/auth/request-reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to request password reset');
+    try {
+      await api.post('/api/auth/request-reset-password', { email });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to request password reset');
     }
   };
 
   const confirmResetPassword = async (token: string, password: string) => {
-    const response = await fetch(`${API_URL}/api/auth/confirm-reset-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to reset password');
+    try {
+      await api.post('/api/auth/confirm-reset-password', { token, password });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to reset password');
     }
   };
 
   const getCurrentUser = async () => {
-    if (token) {
-      await getCurrentUserData(token);
-    }
+    await fetchCurrentUser();
   };
 
   const updateProfile = async (data: Partial<User>) => {
-    if (!token) throw new Error('Not authenticated');
-
-    const response = await fetch(`${API_URL}/api/auth/profile`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update profile');
+    try {
+      const res = await api.put('/api/auth/profile', data);
+      setUser(res.data.data);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update profile');
     }
-
-    const result = await response.json();
-    setUser(result.data);
   };
 
   const updatePassword = async (currentPassword: string, newPassword: string) => {
-    if (!token) throw new Error('Not authenticated');
-
-    const response = await fetch(`${API_URL}/api/auth/password`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update password');
+    try {
+      await api.put('/api/auth/password', { currentPassword, newPassword });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update password');
     }
   };
 
   const updateEmail = async (newEmail: string) => {
-    if (!token) throw new Error('Not authenticated');
-
-    const response = await fetch(`${API_URL}/api/auth/email`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ newEmail }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update email');
+    try {
+      await api.put('/api/auth/email', { newEmail });
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update email');
     }
   };
 

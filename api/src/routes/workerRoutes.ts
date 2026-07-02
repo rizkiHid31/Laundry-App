@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth';
 import { employeeGuard, requireEmployeeRole } from '../middleware/employeeGuard';
+import { requireActiveShift } from '../middleware/shiftGuard';
 import {
   getMyOrders,
   startStation,
@@ -18,9 +19,24 @@ router.use(employeeGuard as any);
 
 // Worker routes
 router.get('/orders', requireEmployeeRole('worker') as any, getMyOrders as any);
-router.post('/orders/:stationId/start', requireEmployeeRole('worker') as any, startStation as any);
-router.post('/orders/:stationId/complete', requireEmployeeRole('worker') as any, completeStation as any);
-router.post('/orders/:stationId/bypass', requireEmployeeRole('worker') as any, requestBypass as any);
+router.post(
+  '/orders/:stationId/start',
+  requireEmployeeRole('worker') as any,
+  requireActiveShift as any,
+  startStation as any,
+);
+router.post(
+  '/orders/:stationId/complete',
+  requireEmployeeRole('worker') as any,
+  requireActiveShift as any,
+  completeStation as any,
+);
+router.post(
+  '/orders/:stationId/bypass',
+  requireEmployeeRole('worker') as any,
+  requireActiveShift as any,
+  requestBypass as any,
+);
 router.get('/history', requireEmployeeRole('worker') as any, getWorkerHistory as any);
 
 // Admin bypass approval routes

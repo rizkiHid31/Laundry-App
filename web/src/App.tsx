@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Navbar from './components/Navbar2';
 
 // Pages
 import HomePage from './components/HomePage';
@@ -25,6 +26,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <Navbar />
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<HomePage />} />

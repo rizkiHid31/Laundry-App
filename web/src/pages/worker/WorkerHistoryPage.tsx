@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface StationItem { laundryItem: { name: string }; quantityInput: number; }
 interface HistoryRecord {
@@ -25,7 +23,6 @@ const stationColor: Record<string, string> = {
 };
 
 export default function WorkerHistoryPage() {
-  const { token } = useAuth();
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -33,14 +30,11 @@ export default function WorkerHistoryPage() {
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`${API}/api/workers/history?page=${page}&limit=10`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setRecords(data.data ?? []);
-    setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
+    const res = await api.get('/api/workers/history', { params: { page, limit: 10 } });
+    setRecords(res.data.data ?? []);
+    setMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
     setLoading(false);
-  }, [token, page]);
+  }, [page]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
@@ -48,7 +42,7 @@ export default function WorkerHistoryPage() {
     new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Riwayat Pekerjaan ({meta.total})</h1>
 
       {loading ? (

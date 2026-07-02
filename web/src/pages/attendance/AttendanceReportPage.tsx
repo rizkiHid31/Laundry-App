@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface ShiftRecord {
   id: string;
@@ -9,13 +7,15 @@ interface ShiftRecord {
   checkIn: string | null;
   checkOut: string | null;
   status: 'ABSENT' | 'PRESENT' | 'COMPLETED';
+  station: 'WASHING' | 'IRONING' | 'PACKING' | null;
   employee: { user: { name: string; email: string } };
 }
+
+const stationLabel: Record<string, string> = { WASHING: 'Cuci', IRONING: 'Setrika', PACKING: 'Packing' };
 
 interface Meta { page: number; totalPages: number; total: number; }
 
 export default function AttendanceReportPage() {
-  const { token } = useAuth();
   const [records, setRecords] = useState<ShiftRecord[]>([]);
   const [meta, setMeta] = useState<Meta>({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
@@ -28,23 +28,19 @@ export default function AttendanceReportPage() {
     setLoading(true);
     setError('');
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
+      const params: Record<string, string> = { page: String(page), limit: '20' };
+      if (dateFrom) params['dateFrom'] = dateFrom;
+      if (dateTo) params['dateTo'] = dateTo;
 
-      const res = await fetch(`${API}/api/attendance/report?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.message); return; }
-      setRecords(data.data ?? []);
-      setMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-    } catch {
-      setError('Gagal memuat data');
+      const res = await api.get('/api/attendance/report', { params });
+      setRecords(res.data.data ?? []);
+      setMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Gagal memuat data');
     } finally {
       setLoading(false);
     }
-  }, [token, page, dateFrom, dateTo]);
+  }, [page, dateFrom, dateTo]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
@@ -62,7 +58,7 @@ export default function AttendanceReportPage() {
   const statusLabel: Record<string, string> = { ABSENT: 'Absen', PRESENT: 'Hadir', COMPLETED: 'Selesai' };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Laporan Absensi Karyawan</h1>
 
@@ -106,6 +102,7 @@ export default function AttendanceReportPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Karyawan</th>
                   <th className="px-4 py-3 text-left">Tanggal</th>
+                  <th className="px-4 py-3 text-center">Station</th>
                   <th className="px-4 py-3 text-center">Clock In</th>
                   <th className="px-4 py-3 text-center">Clock Out</th>
                   <th className="px-4 py-3 text-center">Status</th>
@@ -113,7 +110,7 @@ export default function AttendanceReportPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {records.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-8 text-gray-400">Tidak ada data</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">Tidak ada data</td></tr>
                 ) : records.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
@@ -121,6 +118,7 @@ export default function AttendanceReportPage() {
                       <p className="text-xs text-gray-400">{r.employee.user.email}</p>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{fmtDate(r.shiftDate)}</td>
+                    <td className="px-4 py-3 text-center text-gray-600">{r.station ? stationLabel[r.station] : '-'}</td>
                     <td className="px-4 py-3 text-center text-gray-600">{fmt(r.checkIn)}</td>
                     <td className="px-4 py-3 text-center text-gray-600">{fmt(r.checkOut)}</td>
                     <td className="px-4 py-3 text-center">

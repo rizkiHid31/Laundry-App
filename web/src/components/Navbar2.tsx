@@ -7,6 +7,11 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const roleNames = user?.userRoles?.map((ur) => ur.role.name) ?? [];
+  const isDriver = roleNames.includes('driver');
+  const isWorker = roleNames.includes('worker');
+  const isEmployee = isDriver || isWorker;
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -62,6 +67,30 @@ export default function Navbar() {
                 <span className="text-gray-700">
                   Hi, <strong>{user.firstName}</strong>
                 </span>
+                {isDriver && (
+                  <Link
+                    to="/driver"
+                    className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                  >
+                    Driver Dashboard
+                  </Link>
+                )}
+                {isWorker && (
+                  <Link
+                    to="/worker"
+                    className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                  >
+                    Worker Dashboard
+                  </Link>
+                )}
+                {isEmployee && (
+                  <Link
+                    to="/attendance"
+                    className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                  >
+                    Attendance
+                  </Link>
+                )}
                 <Link
                   to="/profile"
                   className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
@@ -136,6 +165,30 @@ export default function Navbar() {
                     <p className="text-gray-700 py-2">
                       Hi, <strong>{user.firstName}</strong>
                     </p>
+                    {isDriver && (
+                      <Link
+                        to="/driver"
+                        className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
+                      >
+                        Driver Dashboard
+                      </Link>
+                    )}
+                    {isWorker && (
+                      <Link
+                        to="/worker"
+                        className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
+                      >
+                        Worker Dashboard
+                      </Link>
+                    )}
+                    {isEmployee && (
+                      <Link
+                        to="/attendance"
+                        className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
+                      >
+                        Attendance
+                      </Link>
+                    )}
                     <Link
                       to="/profile"
                       className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"

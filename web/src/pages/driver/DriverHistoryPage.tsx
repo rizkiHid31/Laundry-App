@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../../context/AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import api from '../../lib/api';
 
 interface PickupRecord {
   id: string;
@@ -20,7 +18,6 @@ interface DeliveryRecord {
 interface Meta { page: number; totalPages: number; total: number; }
 
 export default function DriverHistoryPage() {
-  const { token } = useAuth();
   const [tab, setTab] = useState<'pickup' | 'delivery'>('pickup');
   const [pickups, setPickups] = useState<PickupRecord[]>([]);
   const [deliveries, setDeliveries] = useState<DeliveryRecord[]>([]);
@@ -30,21 +27,17 @@ export default function DriverHistoryPage() {
   const [deliveryPage, setDeliveryPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const h = { Authorization: `Bearer ${token}` };
-
   const fetchPickups = useCallback(async () => {
-    const res = await fetch(`${API}/api/drivers/pickups/history?page=${pickupPage}&limit=10`, { headers: h });
-    const data = await res.json();
-    setPickups(data.data ?? []);
-    setPickupMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-  }, [token, pickupPage]);
+    const res = await api.get('/api/drivers/pickups/history', { params: { page: pickupPage, limit: 10 } });
+    setPickups(res.data.data ?? []);
+    setPickupMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
+  }, [pickupPage]);
 
   const fetchDeliveries = useCallback(async () => {
-    const res = await fetch(`${API}/api/drivers/deliveries/history?page=${deliveryPage}&limit=10`, { headers: h });
-    const data = await res.json();
-    setDeliveries(data.data ?? []);
-    setDeliveryMeta(data.meta ?? { page: 1, totalPages: 1, total: 0 });
-  }, [token, deliveryPage]);
+    const res = await api.get('/api/drivers/deliveries/history', { params: { page: deliveryPage, limit: 10 } });
+    setDeliveries(res.data.data ?? []);
+    setDeliveryMeta(res.data.meta ?? { page: 1, totalPages: 1, total: 0 });
+  }, [deliveryPage]);
 
   useEffect(() => {
     setLoading(true);
@@ -66,7 +59,7 @@ export default function DriverHistoryPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Memuat...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 max-w-lg mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24 max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Riwayat Driver</h1>
 
       <div className="flex bg-white rounded-xl shadow-sm mb-4 p-1">

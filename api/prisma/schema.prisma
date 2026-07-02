@@ -9,7 +9,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum VerificationTokenType {
   EMAIL_VERIFY
@@ -83,7 +82,6 @@ enum ComplaintStatus {
   RESOLVED
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 model User {
   id           String   @id @default(uuid()) @db.Uuid
@@ -134,7 +132,7 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ─── RBAC ─────────────────────────────────────────────────────────────────────
+
 
 model Role {
   id          String    @id @default(uuid()) @db.Uuid
@@ -189,7 +187,7 @@ model UserRole {
   @@map("user_roles")
 }
 
-// ─── User ─────────────────────────────────────────────────────────────────────
+
 
 model Address {
   id          String   @id @default(uuid()) @db.Uuid
@@ -208,7 +206,7 @@ model Address {
   @@map("addresses")
 }
 
-// ─── Outlet ───────────────────────────────────────────────────────────────────
+
 
 model Outlet {
   id        String   @id @default(uuid()) @db.Uuid
@@ -251,13 +249,14 @@ model OutletEmployee {
 }
 
 model Shift {
-  id         String      @id @default(uuid()) @db.Uuid
-  employeeId String      @map("employee_id") @db.Uuid
-  shiftDate  DateTime    @map("shift_date") @db.Date
-  checkIn    DateTime?   @map("check_in")
-  checkOut   DateTime?   @map("check_out")
-  status     ShiftStatus @default(ABSENT)
-  createdAt  DateTime    @default(now()) @map("created_at")
+  id         String       @id @default(uuid()) @db.Uuid
+  employeeId String       @map("employee_id") @db.Uuid
+  shiftDate  DateTime     @map("shift_date") @db.Date
+  checkIn    DateTime?    @map("check_in")
+  checkOut   DateTime?    @map("check_out")
+  status     ShiftStatus  @default(ABSENT)
+  station    StationName? @map("station")
+  createdAt  DateTime     @default(now()) @map("created_at")
 
   employee OutletEmployee @relation(fields: [employeeId], references: [id])
 
@@ -265,7 +264,7 @@ model Shift {
   @@map("shifts")
 }
 
-// ─── Pricing ──────────────────────────────────────────────────────────────────
+
 
 model LaundryItem {
   id        String   @id @default(uuid()) @db.Uuid
@@ -295,8 +294,6 @@ model OutletItemPrice {
   @@unique([outletId, laundryItemId])
   @@map("outlet_item_prices")
 }
-
-// ─── Pickup & Delivery ────────────────────────────────────────────────────────
 
 model PickupRequest {
   id              String       @id @default(uuid()) @db.Uuid
@@ -340,7 +337,7 @@ model DeliveryRequest {
   @@map("delivery_requests")
 }
 
-// ─── Orders ───────────────────────────────────────────────────────────────────
+
 
 model Order {
   id              String      @id @default(uuid()) @db.Uuid
@@ -383,7 +380,6 @@ model OrderItem {
   @@map("order_items")
 }
 
-// ─── Worker Stations ──────────────────────────────────────────────────────────
 
 model OrderStation {
   id          String        @id @default(uuid()) @db.Uuid
@@ -433,7 +429,6 @@ model BypassRequest {
   @@map("bypass_requests")
 }
 
-// ─── Payment ──────────────────────────────────────────────────────────────────
 
 model Payment {
   id           String        @id @default(uuid()) @db.Uuid
@@ -451,7 +446,7 @@ model Payment {
   @@map("payments")
 }
 
-// ─── Notifications & Complaints ───────────────────────────────────────────────
+
 
 model Notification {
   id        String   @id @default(uuid()) @db.Uuid

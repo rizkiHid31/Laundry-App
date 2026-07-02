@@ -1,11 +1,9 @@
-import Navbar from './Navbar2';
 import Hero from './Hero';
 import Footer from './Footer';
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-white">
-      <Navbar />
       <Hero />
       
       {/* Features Section */}

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "tsx ./src/app.ts",
-    "dev": "nodemon tsx app.ts",
+    "dev": "nodemon --exec tsx src/app.ts",
     "postinstall": "prisma generate",
     "build": "npx prisma generate && npx prisma migrate deploy && tsc",
     "db:generate": "npx prisma generate",
@@ -34,6 +34,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^25.9.0",
     "@types/nodemailer": "^6.4.14",
+    "nodemon": "^3.1.14",
     "prisma": "^7.8.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3"

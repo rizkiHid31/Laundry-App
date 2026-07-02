@@ -26,9 +26,9 @@ export default function LoginPage() {
 
     try {
       await login(formData.email, formData.password);
-      // Redirect to the page they came from or dashboard
-      const from = (location.state as any)?.from?.pathname || '/dashboard';
-      navigate(from);
+      // Redirect to the page they came from, or the attendance page
+      const from = (location.state as any)?.from?.pathname;
+      navigate(from || '/attendance');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

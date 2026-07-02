@@ -1,133 +1,106 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { VerificationTokenType } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken, generateVerificationToken, generateResetToken } from '../utils/jwt';
 import { sendVerificationEmail, sendResetPasswordEmail } from '../utils/email';
 import { AuthRequest } from '../middleware/auth';
 
-const prisma = new PrismaClient();
+const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const getPrimaryRole = async (userId: string): Promise<string> => {
+  const userRole = await prisma.userRole.findFirst({
+    where: { userId, outletId: null },
+    include: { role: true },
+  });
+  return userRole?.role.name ?? '';
+};
 
 // REGISTER
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, firstName, lastName } = req.body as {
-      email: string;
-      firstName: string;
-      lastName: string;
-    };
+    const { name, email } = req.body as { name: string; email: string };
 
-    // Validation
-    if (!email || !firstName) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and firstName are required',
-      });
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'Name and email are required' });
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered',
-      });
+      return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
-    // Generate verification token
-    const verificationToken = generateVerificationToken();
-    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const token = generateVerificationToken();
 
-    // Create user
     const user = await prisma.user.create({
       data: {
+        name,
         email,
-        firstName: firstName || '',
-        lastName: lastName || '',
-        emailVerificationToken: verificationToken,
-        emailVerificationTokenExpiry: tokenExpiry,
-        loginProvider: 'email',
+        verificationTokens: {
+          create: {
+            token,
+            type: VerificationTokenType.EMAIL_VERIFY,
+            expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+          },
+        },
       },
     });
 
-    // Send verification email
-    await sendVerificationEmail(email, firstName, verificationToken);
+    await sendVerificationEmail(email, name, token);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: 'Registration successful. Please check your email to verify your account.',
-      data: {
-        userId: user.id,
-        email: user.email,
-      },
+      data: { userId: user.id, email: user.email },
     });
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Registration failed',
-    });
+    return res.status(500).json({ success: false, message: 'Registration failed' });
   }
 };
 
 // VERIFY EMAIL AND SET PASSWORD
 export const verifyEmailAndSetPassword = async (req: Request, res: Response) => {
   try {
-    const { token, password } = req.body as {
-      token: string;
-      password: string;
-    };
+    const { token, password } = req.body as { token: string; password: string };
 
     if (!token || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Token and password are required',
-      });
+      return res.status(400).json({ success: false, message: 'Token and password are required' });
     }
 
-    // Find user by verification token
-    const user = await prisma.user.findFirst({
+    const verificationToken = await prisma.verificationToken.findFirst({
       where: {
-        emailVerificationToken: token,
-        emailVerificationTokenExpiry: {
-          gt: new Date(), // Token not expired
-        },
+        token,
+        type: VerificationTokenType.EMAIL_VERIFY,
+        isUsed: false,
+        expiresAt: { gt: new Date() },
       },
     });
 
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired verification token',
-      });
+    if (!verificationToken) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification token' });
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(password);
+    const passwordHash = await hashPassword(password);
 
-    // Update user
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        isVerified: true,
-        emailVerificationToken: null,
-        emailVerificationTokenExpiry: null,
-      },
-    });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: verificationToken.userId },
+        data: { passwordHash, isVerified: true },
+      }),
+      prisma.verificationToken.update({
+        where: { id: verificationToken.id },
+        data: { isUsed: true },
+      }),
+    ]);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Email verified successfully. Please login with your new password.',
     });
   } catch (error) {
     console.error('Verify email error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Email verification failed',
-    });
+    return res.status(500).json({ success: false, message: 'Email verification failed' });
   }
 };
 
@@ -137,120 +110,79 @@ export const resendVerificationEmail = async (req: Request, res: Response) => {
     const { email } = req.body as { email: string };
 
     if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required',
-      });
+      return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(400).json({ success: false, message: 'User not found' });
     }
 
     if (user.isVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'User is already verified',
-      });
+      return res.status(400).json({ success: false, message: 'User is already verified' });
     }
 
-    // Generate new verification token
-    const verificationToken = generateVerificationToken();
-    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    const token = generateVerificationToken();
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerificationToken: verificationToken,
-        emailVerificationTokenExpiry: tokenExpiry,
-      },
-    });
+    await prisma.$transaction([
+      prisma.verificationToken.updateMany({
+        where: { userId: user.id, type: VerificationTokenType.EMAIL_VERIFY, isUsed: false },
+        data: { isUsed: true },
+      }),
+      prisma.verificationToken.create({
+        data: {
+          userId: user.id,
+          token,
+          type: VerificationTokenType.EMAIL_VERIFY,
+          expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+        },
+      }),
+    ]);
 
-    // Send verification email
-    await sendVerificationEmail(email, user.firstName || 'User', verificationToken);
+    await sendVerificationEmail(email, user.name, token);
 
-    res.json({
-      success: true,
-      message: 'Verification email sent. Please check your email.',
-    });
+    return res.json({ success: true, message: 'Verification email sent. Please check your email.' });
   } catch (error) {
     console.error('Resend verification error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to resend verification email',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to resend verification email' });
   }
 };
 
 // LOGIN
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body as {
-      email: string;
-      password: string;
-    };
+    const { email, password } = req.body as { email: string; password: string };
 
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required',
-      });
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
     if (!user.isVerified) {
-      return res.status(401).json({
-        success: false,
-        message: 'Please verify your email first',
-      });
+      return res.status(401).json({ success: false, message: 'Please verify your email first' });
     }
 
-    if (!user.password) {
+    if (!user.passwordHash) {
       return res.status(401).json({
         success: false,
         message: 'This account uses social login. Please use social login to proceed.',
       });
     }
 
-    const isPasswordValid = await comparePassword(password, user.password);
+    const isPasswordValid = await comparePassword(password, user.passwordHash);
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    // Update last login
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    });
+    const role = await getPrimaryRole(user.id);
 
-    // Generate token
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
+    const token = generateToken({ userId: user.id, email: user.email, role });
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Login successful',
       data: {
@@ -258,19 +190,15 @@ export const login = async (req: Request, res: Response) => {
         user: {
           id: user.id,
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
+          name: user.name,
+          role,
           isVerified: user.isVerified,
         },
       },
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Login failed',
-    });
+    return res.status(500).json({ success: false, message: 'Login failed' });
   }
 };
 
@@ -280,112 +208,92 @@ export const requestResetPassword = async (req: Request, res: Response) => {
     const { email } = req.body as { email: string };
 
     if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required',
-      });
+      return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(400).json({ success: false, message: 'User not found' });
     }
 
-    if (!user.password || user.loginProvider !== 'email') {
+    if (!user.passwordHash) {
       return res.status(400).json({
         success: false,
         message: 'This account uses social login. Please use social login to reset password.',
       });
     }
 
-    // Generate reset token
-    const resetToken = generateResetToken();
-    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    const token = generateResetToken();
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: resetToken,
-        resetPasswordTokenExpiry: tokenExpiry,
-      },
-    });
+    await prisma.$transaction([
+      prisma.verificationToken.updateMany({
+        where: { userId: user.id, type: VerificationTokenType.RESET_PASSWORD, isUsed: false },
+        data: { isUsed: true },
+      }),
+      prisma.verificationToken.create({
+        data: {
+          userId: user.id,
+          token,
+          type: VerificationTokenType.RESET_PASSWORD,
+          expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+        },
+      }),
+    ]);
 
-    // Send reset password email
-    await sendResetPasswordEmail(email, user.firstName || 'User', resetToken);
+    await sendResetPasswordEmail(email, user.name, token);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Reset password link sent to your email. Please check your email.',
     });
   } catch (error) {
     console.error('Request reset password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send reset password email',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to send reset password email' });
   }
 };
 
 // CONFIRM RESET PASSWORD
 export const confirmResetPassword = async (req: Request, res: Response) => {
   try {
-    const { token, password } = req.body as {
-      token: string;
-      password: string;
-    };
+    const { token, password } = req.body as { token: string; password: string };
 
     if (!token || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Token and password are required',
-      });
+      return res.status(400).json({ success: false, message: 'Token and password are required' });
     }
 
-    const user = await prisma.user.findFirst({
+    const verificationToken = await prisma.verificationToken.findFirst({
       where: {
-        resetPasswordToken: token,
-        resetPasswordTokenExpiry: {
-          gt: new Date(),
-        },
+        token,
+        type: VerificationTokenType.RESET_PASSWORD,
+        isUsed: false,
+        expiresAt: { gt: new Date() },
       },
     });
 
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired reset token',
-      });
+    if (!verificationToken) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
     }
 
-    // Hash new password
-    const hashedPassword = await hashPassword(password);
+    const passwordHash = await hashPassword(password);
 
-    // Update user
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-        resetPasswordTokenExpiry: null,
-      },
-    });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: verificationToken.userId },
+        data: { passwordHash },
+      }),
+      prisma.verificationToken.update({
+        where: { id: verificationToken.id },
+        data: { isUsed: true },
+      }),
+    ]);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Password reset successfully. Please login with your new password.',
     });
   } catch (error) {
     console.error('Confirm reset password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reset password',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to reset password' });
   }
 };
 
@@ -393,10 +301,7 @@ export const confirmResetPassword = async (req: Request, res: Response) => {
 export const getCurrentUser = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
     const user = await prisma.user.findUnique({
@@ -404,38 +309,24 @@ export const getCurrentUser = async (req: AuthRequest, res: Response) => {
       select: {
         id: true,
         email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        address: true,
-        city: true,
-        province: true,
-        postalCode: true,
-        profilePicture: true,
-        role: true,
+        name: true,
         isVerified: true,
-        loginProvider: true,
+        photoUrl: true,
         createdAt: true,
+        userRoles: {
+          include: { role: { select: { name: true, scope: true } } },
+        },
       },
     });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    res.json({
-      success: true,
-      data: user,
-    });
+    return res.json({ success: true, data: user });
   } catch (error) {
     console.error('Get current user error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get user',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to get user' });
   }
 };
 
@@ -443,50 +334,24 @@ export const getCurrentUser = async (req: AuthRequest, res: Response) => {
 export const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const { firstName, lastName, phone, address, city, province, postalCode } = req.body;
+    const { name, photoUrl } = req.body as { name?: string; photoUrl?: string };
 
     const user = await prisma.user.update({
       where: { id: req.user.userId },
       data: {
-        firstName: firstName || undefined,
-        lastName: lastName || undefined,
-        phone: phone || undefined,
-        address: address || undefined,
-        city: city || undefined,
-        province: province || undefined,
-        postalCode: postalCode || undefined,
+        ...(name ? { name } : {}),
+        ...(photoUrl ? { photoUrl } : {}),
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        address: true,
-        city: true,
-        province: true,
-        postalCode: true,
-        profilePicture: true,
-      },
+      select: { id: true, email: true, name: true, photoUrl: true },
     });
 
-    res.json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: user,
-    });
+    return res.json({ success: true, message: 'Profile updated successfully', data: user });
   } catch (error) {
     console.error('Update profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update profile',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to update profile' });
   }
 };
 
@@ -494,13 +359,13 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
 export const updatePassword = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
@@ -509,41 +374,26 @@ export const updatePassword = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-    });
-
-    if (!user || !user.password) {
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    if (!user?.passwordHash) {
       return res.status(400).json({
         success: false,
         message: 'Cannot update password for social login accounts',
       });
     }
 
-    const isPasswordValid = await comparePassword(currentPassword, user.password);
+    const isPasswordValid = await comparePassword(currentPassword, user.passwordHash);
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Current password is incorrect',
-      });
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
     }
 
-    const hashedPassword = await hashPassword(newPassword);
-    await prisma.user.update({
-      where: { id: req.user.userId },
-      data: { password: hashedPassword },
-    });
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({ where: { id: req.user.userId }, data: { passwordHash } });
 
-    res.json({
-      success: true,
-      message: 'Password updated successfully',
-    });
+    return res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
     console.error('Update password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update password',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to update password' });
   }
 };
 
@@ -551,60 +401,45 @@ export const updatePassword = async (req: AuthRequest, res: Response) => {
 export const updateEmail = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const { newEmail } = req.body;
-
+    const { newEmail } = req.body as { newEmail: string };
     if (!newEmail) {
-      return res.status(400).json({
-        success: false,
-        message: 'New email is required',
-      });
+      return res.status(400).json({ success: false, message: 'New email is required' });
     }
 
-    // Check if email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: newEmail },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { email: newEmail } });
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already in use',
-      });
+      return res.status(400).json({ success: false, message: 'Email already in use' });
     }
 
-    // Generate verification token for new email
-    const verificationToken = generateVerificationToken();
-    const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000);
+    const token = generateVerificationToken();
 
     const user = await prisma.user.update({
       where: { id: req.user.userId },
       data: {
         email: newEmail,
         isVerified: false,
-        emailVerificationToken: verificationToken,
-        emailVerificationTokenExpiry: tokenExpiry,
+        verificationTokens: {
+          create: {
+            token,
+            type: VerificationTokenType.EMAIL_VERIFY,
+            expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+          },
+        },
       },
     });
 
-    // Send verification email to new email
-    await sendVerificationEmail(newEmail, user.firstName || 'User', verificationToken);
+    await sendVerificationEmail(newEmail, user.name, token);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Verification link sent to new email. Please verify to confirm email change.',
     });
   } catch (error) {
     console.error('Update email error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update email',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to update email' });
   }
 };
 
@@ -612,23 +447,13 @@ export const updateEmail = async (req: AuthRequest, res: Response) => {
 export const uploadProfilePicture = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
     // TODO: Implement file upload logic
-    // For now, this is a placeholder
-    res.json({
-      success: false,
-      message: 'Profile picture upload not yet implemented',
-    });
+    return res.json({ success: false, message: 'Profile picture upload not yet implemented' });
   } catch (error) {
     console.error('Upload profile picture error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to upload profile picture',
-    });
+    return res.status(500).json({ success: false, message: 'Failed to upload profile picture' });
   }
 };
