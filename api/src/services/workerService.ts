@@ -9,6 +9,25 @@ import {
   ItemInput,
 } from './stationShared';
 
+export { retryPaymentGate } from './stationShared';
+
+const waitingPaymentInclude = {
+  payment: { select: { status: true, amount: true, paidAt: true } },
+  pickupRequest: { select: { customer: { select: { name: true } } } },
+};
+
+export const getOrdersWaitingPayment = async (outletId: string, query: Record<string, unknown>) => {
+  const { page, limit, skip } = getPagination(query);
+  const where = { outletId, status: OrderStatus.WAITING_PAYMENT };
+
+  const [orders, total] = await prisma.$transaction([
+    prisma.order.findMany({ where, include: waitingPaymentInclude, orderBy: { updatedAt: 'desc' }, skip, take: limit }),
+    prisma.order.count({ where }),
+  ]);
+
+  return { orders, meta: buildMeta(page, limit, total) };
+};
+
 const myOrdersInclude = {
   order: {
     include: {

@@ -21,6 +21,7 @@ import DriverHistoryPage from './pages/driver/DriverHistoryPage';
 import WorkerDashboardPage from './pages/worker/WorkerDashboardPage';
 import StationDetailPage from './pages/worker/StationDetailPage';
 import WorkerHistoryPage from './pages/worker/WorkerHistoryPage';
+import OrdersWaitingPaymentPage from './pages/admin/OrdersWaitingPaymentPage';
 
 function App() {
   return (
@@ -74,6 +75,9 @@ function App() {
           <Route path="/worker" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
           <Route path="/worker/orders/:stationId" element={<ProtectedRoute><StationDetailPage /></ProtectedRoute>} />
           <Route path="/worker/history" element={<ProtectedRoute><WorkerHistoryPage /></ProtectedRoute>} />
+
+          {/* Feature 3 — Admin: payment retry gate for packing */}
+          <Route path="/admin/orders/waiting-payment" element={<ProtectedRoute><OrdersWaitingPaymentPage /></ProtectedRoute>} />
 
           {/* Catch all - redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

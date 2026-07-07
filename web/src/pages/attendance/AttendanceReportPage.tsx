@@ -8,7 +8,7 @@ interface ShiftRecord {
   checkOut: string | null;
   status: 'ABSENT' | 'PRESENT' | 'COMPLETED';
   station: 'WASHING' | 'IRONING' | 'PACKING' | null;
-  employee: { user: { name: string; email: string } };
+  employee: { user: { name: string; email: string; userRoles: { role: { name: string } }[] } };
 }
 
 const stationLabel: Record<string, string> = { WASHING: 'Cuci', IRONING: 'Setrika', PACKING: 'Packing' };
@@ -21,6 +21,7 @@ export default function AttendanceReportPage() {
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [role, setRole] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -31,6 +32,7 @@ export default function AttendanceReportPage() {
       const params: Record<string, string> = { page: String(page), limit: '20' };
       if (dateFrom) params['dateFrom'] = dateFrom;
       if (dateTo) params['dateTo'] = dateTo;
+      if (role) params['role'] = role;
 
       const res = await api.get('/api/attendance/report', { params });
       setRecords(res.data.data ?? []);
@@ -40,7 +42,7 @@ export default function AttendanceReportPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, dateFrom, dateTo]);
+  }, [page, dateFrom, dateTo, role]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
@@ -56,6 +58,10 @@ export default function AttendanceReportPage() {
     COMPLETED: 'bg-green-100 text-green-700',
   };
   const statusLabel: Record<string, string> = { ABSENT: 'Absen', PRESENT: 'Hadir', COMPLETED: 'Selesai' };
+
+  const roleLabel: Record<string, string> = { worker: 'Worker', driver: 'Driver' };
+  const getRoleName = (r: ShiftRecord) =>
+    r.employee.user.userRoles.map((ur) => roleLabel[ur.role.name]).find(Boolean) ?? '-';
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 pb-4 pt-20 sm:pt-24">
@@ -82,8 +88,20 @@ export default function AttendanceReportPage() {
               className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Role</label>
+            <select
+              value={role}
+              onChange={(e) => { setRole(e.target.value); setPage(1); }}
+              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Semua (Worker & Driver)</option>
+              <option value="worker">Worker</option>
+              <option value="driver">Driver</option>
+            </select>
+          </div>
           <button
-            onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
+            onClick={() => { setDateFrom(''); setDateTo(''); setRole(''); setPage(1); }}
             className="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50"
           >
             Reset
@@ -101,6 +119,7 @@ export default function AttendanceReportPage() {
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                 <tr>
                   <th className="px-4 py-3 text-left">Karyawan</th>
+                  <th className="px-4 py-3 text-center">Role</th>
                   <th className="px-4 py-3 text-left">Tanggal</th>
                   <th className="px-4 py-3 text-center">Station</th>
                   <th className="px-4 py-3 text-center">Clock In</th>
@@ -110,13 +129,14 @@ export default function AttendanceReportPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {records.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">Tidak ada data</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">Tidak ada data</td></tr>
                 ) : records.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800">{r.employee.user.name}</p>
                       <p className="text-xs text-gray-400">{r.employee.user.email}</p>
                     </td>
+                    <td className="px-4 py-3 text-center text-gray-600">{getRoleName(r)}</td>
                     <td className="px-4 py-3 text-gray-600">{fmtDate(r.shiftDate)}</td>
                     <td className="px-4 py-3 text-center text-gray-600">{r.station ? stationLabel[r.station] : '-'}</td>
                     <td className="px-4 py-3 text-center text-gray-600">{fmt(r.checkIn)}</td>

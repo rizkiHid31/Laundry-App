@@ -82,6 +82,29 @@ export const rejectBypass = async (req: EmployeeRequest, res: Response): Promise
   }
 };
 
+export const getOrdersWaitingPayment = async (req: EmployeeRequest, res: Response): Promise<void> => {
+  try {
+    const { outletId } = req.employee!;
+    const result = await workerService.getOrdersWaitingPayment(outletId, req.query as Record<string, unknown>);
+    res.json({ success: true, data: result.orders, meta: result.meta });
+  } catch (error) {
+    console.error('getOrdersWaitingPayment error:', error);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data' });
+  }
+};
+
+export const retryPaymentGate = async (req: EmployeeRequest, res: Response): Promise<void> => {
+  try {
+    const { outletId } = req.employee!;
+    const { orderId } = req.params as { orderId: string };
+    await workerService.retryPaymentGate(outletId, orderId);
+    res.json({ success: true, message: 'Order dilanjutkan ke pengiriman' });
+  } catch (error: any) {
+    console.error('retryPaymentGate error:', error);
+    res.status(error?.status ?? 500).json({ success: false, message: error.message ?? 'Gagal memproses order' });
+  }
+};
+
 export const getWorkerHistory = async (req: EmployeeRequest, res: Response): Promise<void> => {
   try {
     const { id: workerId } = req.employee!;

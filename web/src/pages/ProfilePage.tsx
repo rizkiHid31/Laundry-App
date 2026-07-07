@@ -8,18 +8,23 @@ export default function ProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    phone: user?.phone || '',
-    address: user?.address || '',
-    city: user?.city || '',
-    province: user?.province || '',
-    postalCode: user?.postalCode || '',
+    name: user?.name || '',
   });
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const roleLabel: Record<string, string> = {
+    worker: 'Worker',
+    driver: 'Driver',
+    outlet_admin: 'Outlet Admin',
+    super_admin: 'Super Admin',
+    customer: 'Customer',
+  };
+  const employment = user?.outletEmployees?.[0];
+  const allRoleNames = (user?.userRoles ?? []).map((ur) => ur.role.name);
+  const employeeRoleNames = allRoleNames.filter((name) => name !== 'customer');
 
   if (!user) {
     return (
@@ -94,10 +99,10 @@ export default function ProfilePage() {
               {/* Profile Picture */}
               <div className="flex items-center gap-6 mb-8 pb-8 border-b">
                 <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center">
-                  {user.profilePicture ? (
+                  {user.photoUrl ? (
                     <img
-                      src={user.profilePicture}
-                      alt={user.firstName}
+                      src={user.photoUrl}
+                      alt={user.name}
                       className="w-24 h-24 rounded-full object-cover"
                     />
                   ) : (
@@ -111,13 +116,18 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {user.firstName} {user.lastName}
-                  </h2>
+                  <h2 className="text-2xl font-bold text-gray-900">{user.name}</h2>
                   <p className="text-gray-600">{user.email}</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {user.role.charAt(0).toUpperCase() + user.role.slice(1).toLowerCase()}
-                  </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {allRoleNames.map((name) => (
+                      <span
+                        key={name}
+                        className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                      >
+                        {roleLabel[name] ?? name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -127,36 +137,12 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-gray-500">First Name</p>
-                        <p className="font-semibold text-gray-900">{user.firstName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Last Name</p>
-                        <p className="font-semibold text-gray-900">{user.lastName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Phone</p>
-                        <p className="font-semibold text-gray-900">{user.phone || 'Not set'}</p>
+                        <p className="text-sm text-gray-500">Name</p>
+                        <p className="font-semibold text-gray-900">{user.name}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Email</p>
                         <p className="font-semibold text-gray-900">{user.email}</p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-sm text-gray-500">Address</p>
-                        <p className="font-semibold text-gray-900">{user.address || 'Not set'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">City</p>
-                        <p className="font-semibold text-gray-900">{user.city || 'Not set'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Province</p>
-                        <p className="font-semibold text-gray-900">{user.province || 'Not set'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Postal Code</p>
-                        <p className="font-semibold text-gray-900">{user.postalCode || 'Not set'}</p>
                       </div>
                     </div>
                   </div>
@@ -170,77 +156,15 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-gray-700 font-medium mb-2">First Name</label>
-                      <input
-                        type="text"
-                        name="firstName"
-                        value={formData.firstName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 font-medium mb-2">Last Name</label>
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={formData.lastName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-gray-700 font-medium mb-2">Phone</label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-gray-700 font-medium mb-2">Address</label>
-                      <input
-                        type="text"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 font-medium mb-2">City</label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={formData.city}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 font-medium mb-2">Province</label>
-                      <input
-                        type="text"
-                        name="province"
-                        value={formData.province}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-gray-700 font-medium mb-2">Postal Code</label>
-                      <input
-                        type="text"
-                        name="postalCode"
-                        value={formData.postalCode}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-gray-700 font-medium mb-2">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
 
                   <div className="flex gap-4 pt-4">
@@ -266,6 +190,49 @@ export default function ProfilePage() {
 
           {/* Sidebar */}
           <div className="space-y-4">
+            {/* Employment Info */}
+            {employment && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Employment Info</h3>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Outlet</p>
+                    <p className="font-semibold text-gray-900">{employment.outlet.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Role</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {employeeRoleNames.map((name) => (
+                        <span
+                          key={name}
+                          className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                        >
+                          {roleLabel[name] ?? name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Status</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className={`w-2.5 h-2.5 rounded-full ${employment.isActive ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                      <span className="font-semibold text-gray-900">
+                        {employment.isActive ? 'Aktif' : 'Nonaktif'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Bergabung Sejak</p>
+                    <p className="font-semibold text-gray-900">
+                      {new Date(employment.createdAt).toLocaleDateString('id-ID', {
+                        day: 'numeric', month: 'long', year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Account Settings */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Account Settings</h3>

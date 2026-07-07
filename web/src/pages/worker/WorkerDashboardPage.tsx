@@ -67,7 +67,7 @@ export default function WorkerDashboardPage() {
           Riwayat →
         </Link>
       </div>
-      <p className="text-sm text-gray-500 mb-6">Halo, {user?.firstName ?? 'Worker'}</p>
+      <p className="text-sm text-gray-500 mb-6">Halo, {user?.name ?? 'Worker'}</p>
 
       {message && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">{message}</div>

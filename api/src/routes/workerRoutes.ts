@@ -9,6 +9,8 @@ import {
   requestBypass,
   approveBypass,
   rejectBypass,
+  getOrdersWaitingPayment,
+  retryPaymentGate,
   getWorkerHistory,
 } from '../controllers/workerController';
 
@@ -49,6 +51,16 @@ router.patch(
   '/bypass/:bypassId/reject',
   requireEmployeeRole('outlet_admin', 'super_admin') as any,
   rejectBypass as any,
+);
+router.get(
+  '/orders/waiting-payment',
+  requireEmployeeRole('outlet_admin', 'super_admin') as any,
+  getOrdersWaitingPayment as any,
+);
+router.post(
+  '/orders/:orderId/retry-payment',
+  requireEmployeeRole('outlet_admin', 'super_admin') as any,
+  retryPaymentGate as any,
 );
 
 export default router;

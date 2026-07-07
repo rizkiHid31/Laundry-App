@@ -4,18 +4,16 @@ import api from '../lib/api';
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  province?: string;
-  postalCode?: string;
-  profilePicture?: string;
-  role: string;
+  name: string;
+  photoUrl?: string;
   isVerified: boolean;
-  loginProvider: string;
   userRoles?: Array<{ role: { name: string; scope: string } }>;
+  outletEmployees?: Array<{
+    outletId: string;
+    isActive: boolean;
+    createdAt: string;
+    outlet: { name: string };
+  }>;
 }
 
 interface AuthContextType {
@@ -138,7 +136,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (data: Partial<User>) => {
     try {
       const res = await api.put('/api/auth/profile', data);
-      setUser(res.data.data);
+      setUser((prev) => (prev ? { ...prev, ...res.data.data } : res.data.data));
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to update profile');
     }

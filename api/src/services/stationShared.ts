@@ -1,5 +1,5 @@
 import { Prisma, StationStatus, StationName, OrderStatus } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { prisma, runSerializable } from '../lib/prisma';
 
 export const stationOrderStatus: Record<StationName, OrderStatus> = {
   WASHING: OrderStatus.WASHING,
@@ -68,4 +68,28 @@ export const advanceOrderStage = async (tx: Prisma.TransactionClient, orderId: s
   if (next) {
     await advanceToNextStation(tx, orderId, next);
   }
+};
+
+// For orders stuck in WAITING_PAYMENT (packing finished before payment came in):
+// re-checks the payment and, once paid, replays the paid branch of finishPacking
+// so the order becomes READY_TO_DELIVER and a DeliveryRequest is created for drivers.
+// Runs the read-check-act sequence inside a serializable transaction so two
+// concurrent retries (e.g. a double-click) can't both pass the status check before
+// either commits — the loser's retry re-reads the now-committed status and reports
+// the correct business error instead of a raw constraint violation.
+export const retryPaymentGate = async (outletId: string, orderId: string) => {
+  await runSerializable(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId }, include: { payment: true } });
+    if (!order || order.outletId !== outletId) {
+      throw Object.assign(new Error('Order tidak ditemukan'), { status: 404 });
+    }
+    if (order.status !== OrderStatus.WAITING_PAYMENT) {
+      throw Object.assign(new Error('Order tidak sedang menunggu pembayaran'), { status: 400 });
+    }
+    if (order.payment?.status !== 'PAID') {
+      throw Object.assign(new Error('Pembayaran belum lunas'), { status: 400 });
+    }
+
+    await finishPacking(tx, order.id, order.pickupRequestId, order.outletId, true);
+  });
 };

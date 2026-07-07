@@ -10,6 +10,7 @@ export default function Navbar() {
   const roleNames = user?.userRoles?.map((ur) => ur.role.name) ?? [];
   const isDriver = roleNames.includes('driver');
   const isWorker = roleNames.includes('worker');
+  const isOutletAdmin = roleNames.includes('outlet_admin') || roleNames.includes('super_admin');
   const isEmployee = isDriver || isWorker;
 
   const handleLogout = () => {
@@ -65,7 +66,7 @@ export default function Navbar() {
             ) : (
               <div className="flex items-center gap-4">
                 <span className="text-gray-700">
-                  Hi, <strong>{user.firstName}</strong>
+                  Hi, <strong>{user.name}</strong>
                 </span>
                 {isDriver && (
                   <Link
@@ -89,6 +90,22 @@ export default function Navbar() {
                     className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
                   >
                     Attendance
+                  </Link>
+                )}
+                {isOutletAdmin && (
+                  <Link
+                    to="/attendance/report"
+                    className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                  >
+                    Attendance Report
+                  </Link>
+                )}
+                {isOutletAdmin && (
+                  <Link
+                    to="/admin/orders/waiting-payment"
+                    className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                  >
+                    Waiting Payment
                   </Link>
                 )}
                 <Link
@@ -163,7 +180,7 @@ export default function Navbar() {
                 ) : (
                   <>
                     <p className="text-gray-700 py-2">
-                      Hi, <strong>{user.firstName}</strong>
+                      Hi, <strong>{user.name}</strong>
                     </p>
                     {isDriver && (
                       <Link
@@ -187,6 +204,22 @@ export default function Navbar() {
                         className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
                       >
                         Attendance
+                      </Link>
+                    )}
+                    {isOutletAdmin && (
+                      <Link
+                        to="/attendance/report"
+                        className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
+                      >
+                        Attendance Report
+                      </Link>
+                    )}
+                    {isOutletAdmin && (
+                      <Link
+                        to="/admin/orders/waiting-payment"
+                        className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
+                      >
+                        Waiting Payment
                       </Link>
                     )}
                     <Link

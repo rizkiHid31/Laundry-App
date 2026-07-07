@@ -316,6 +316,14 @@ export const getCurrentUser = async (req: AuthRequest, res: Response) => {
         userRoles: {
           include: { role: { select: { name: true, scope: true } } },
         },
+        outletEmployees: {
+          select: {
+            outletId: true,
+            isActive: true,
+            createdAt: true,
+            outlet: { select: { name: true } },
+          },
+        },
       },
     });
 

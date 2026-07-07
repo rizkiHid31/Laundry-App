@@ -83,14 +83,40 @@ const buildDateRangeFilter = (query: Record<string, unknown>) => {
   return { shiftDate: { ...(dateFrom ? { gte: dateFrom } : {}), ...(dateTo ? { lte: dateTo } : {}) } };
 };
 
+const REPORTABLE_ROLES = ['worker', 'driver'];
+
+const resolveReportRoles = (query: Record<string, unknown>): string[] => {
+  const role = query['role'] as string | undefined;
+  return role && REPORTABLE_ROLES.includes(role) ? [role] : REPORTABLE_ROLES;
+};
+
 export const getAttendanceReport = async (outletId: string, query: Record<string, unknown>) => {
   const { page, limit, skip } = getPagination(query);
-  const where = { employee: { outletId }, ...buildDateRangeFilter(query) };
+  const roles = resolveReportRoles(query);
+  const where = {
+    employee: {
+      outletId,
+      user: { userRoles: { some: { outletId, role: { name: { in: roles } } } } },
+    },
+    ...buildDateRangeFilter(query),
+  };
 
   const [shifts, total] = await prisma.$transaction([
     prisma.shift.findMany({
       where,
-      include: { employee: { select: { user: { select: { name: true, email: true } } } } },
+      include: {
+        employee: {
+          select: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+                userRoles: { where: { outletId }, select: { role: { select: { name: true } } } },
+              },
+            },
+          },
+        },
+      },
       orderBy: { shiftDate: 'desc' },
       skip,
       take: limit,

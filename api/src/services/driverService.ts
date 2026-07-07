@@ -1,17 +1,17 @@
-import { PickupStatus, DeliveryStatus, OrderStatus } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { Prisma, PickupStatus, DeliveryStatus, OrderStatus } from '@prisma/client';
+import { prisma, runSerializable } from '../lib/prisma';
 import { getPagination, buildMeta } from '../utils/pagination';
 
-const hasActiveOrder = async (driverId: string): Promise<boolean> => {
-  const [activePickup, activeDelivery] = await prisma.$transaction([
-    prisma.pickupRequest.count({ where: { driverId, status: PickupStatus.ON_THE_WAY } }),
-    prisma.deliveryRequest.count({ where: { driverId, status: DeliveryStatus.ON_THE_WAY } }),
+const hasActiveOrder = async (tx: Prisma.TransactionClient, driverId: string): Promise<boolean> => {
+  const [activePickup, activeDelivery] = await Promise.all([
+    tx.pickupRequest.count({ where: { driverId, status: PickupStatus.ON_THE_WAY } }),
+    tx.deliveryRequest.count({ where: { driverId, status: DeliveryStatus.ON_THE_WAY } }),
   ]);
   return activePickup > 0 || activeDelivery > 0;
 };
 
-const ensureNoActiveOrder = async (driverId: string) => {
-  if (await hasActiveOrder(driverId)) {
+const ensureNoActiveOrder = async (tx: Prisma.TransactionClient, driverId: string) => {
+  if (await hasActiveOrder(tx, driverId)) {
     throw Object.assign(new Error('Masih ada order aktif, selesaikan terlebih dahulu'), { status: 400 });
   }
 };
@@ -43,16 +43,18 @@ export const getAvailablePickups = async (outletId: string, query: Record<string
 };
 
 export const acceptPickup = async (driverId: string, pickupId: string) => {
-  await ensureNoActiveOrder(driverId);
+  return runSerializable(async (tx) => {
+    await ensureNoActiveOrder(tx, driverId);
 
-  const pickup = await prisma.pickupRequest.findUnique({ where: { id: pickupId } });
-  if (!pickup || pickup.status !== PickupStatus.WAITING_DRIVER || pickup.driverId) {
-    throw Object.assign(new Error('Pickup tidak tersedia'), { status: 400 });
-  }
+    const pickup = await tx.pickupRequest.findUnique({ where: { id: pickupId } });
+    if (!pickup || pickup.status !== PickupStatus.WAITING_DRIVER || pickup.driverId) {
+      throw Object.assign(new Error('Pickup tidak tersedia'), { status: 400 });
+    }
 
-  return prisma.pickupRequest.update({
-    where: { id: pickupId },
-    data: { driverId, status: PickupStatus.ON_THE_WAY, pickedUpAt: new Date() },
+    return tx.pickupRequest.update({
+      where: { id: pickupId },
+      data: { driverId, status: PickupStatus.ON_THE_WAY, pickedUpAt: new Date() },
+    });
   });
 };
 
@@ -116,16 +118,18 @@ export const getAvailableDeliveries = async (outletId: string, query: Record<str
 };
 
 export const acceptDelivery = async (driverId: string, deliveryId: string) => {
-  await ensureNoActiveOrder(driverId);
+  return runSerializable(async (tx) => {
+    await ensureNoActiveOrder(tx, driverId);
 
-  const delivery = await prisma.deliveryRequest.findUnique({ where: { id: deliveryId } });
-  if (!delivery || delivery.status !== DeliveryStatus.WAITING_DRIVER || delivery.driverId) {
-    throw Object.assign(new Error('Delivery tidak tersedia'), { status: 400 });
-  }
+    const delivery = await tx.deliveryRequest.findUnique({ where: { id: deliveryId } });
+    if (!delivery || delivery.status !== DeliveryStatus.WAITING_DRIVER || delivery.driverId) {
+      throw Object.assign(new Error('Delivery tidak tersedia'), { status: 400 });
+    }
 
-  return prisma.deliveryRequest.update({
-    where: { id: deliveryId },
-    data: { driverId, status: DeliveryStatus.ON_THE_WAY, pickedUpAt: new Date() },
+    return tx.deliveryRequest.update({
+      where: { id: deliveryId },
+      data: { driverId, status: DeliveryStatus.ON_THE_WAY, pickedUpAt: new Date() },
+    });
   });
 };
 
