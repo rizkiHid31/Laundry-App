@@ -15,7 +15,7 @@ import {
   getDeliveryHistory,
 } from '../controllers/driverController';
 
-const router = Router();
+const router: Router = Router();
 
 router.use(authMiddleware as any);
 router.use(employeeGuard as any);
