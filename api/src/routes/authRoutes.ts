@@ -14,7 +14,7 @@ import {
   uploadProfilePicture,
 } from '../controllers/authController';
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 // Public routes
 router.post('/register', register as any);
