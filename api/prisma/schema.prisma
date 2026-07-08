@@ -413,15 +413,16 @@ model StationItem {
 }
 
 model BypassRequest {
-  id         String       @id @default(uuid()) @db.Uuid
-  stationId  String       @map("station_id") @db.Uuid
-  adminId    String?      @map("admin_id") @db.Uuid
-  reason     String
-  status     BypassStatus @default(PENDING)
-  adminNote  String?      @map("admin_note")
-  approvedAt DateTime?    @map("approved_at")
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
+  id            String       @id @default(uuid()) @db.Uuid
+  stationId     String       @map("station_id") @db.Uuid
+  adminId       String?      @map("admin_id") @db.Uuid
+  reason        String
+  reportedItems Json?        @map("reported_items")
+  status        BypassStatus @default(PENDING)
+  adminNote     String?      @map("admin_note")
+  approvedAt    DateTime?    @map("approved_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
   station OrderStation    @relation(fields: [stationId], references: [id])
   admin   OutletEmployee? @relation(fields: [adminId], references: [id])

@@ -6,6 +6,8 @@ import {
   getTodayStation,
   checkMismatch,
   advanceOrderStage,
+  ensureItemsProvided,
+  saveStationItems,
   ItemInput,
 } from './stationShared';
 
@@ -33,6 +35,9 @@ const myOrdersInclude = {
     include: {
       orderItems: { include: { laundryItem: { select: { name: true, unit: true } } } },
       pickupRequest: { select: { scheduledAt: true, customer: { select: { name: true } } } },
+      // Previous stations' recorded quantities, so the frontend can prefill the
+      // IRONING/PACKING input with the correct reference instead of the original order quantity.
+      orderStations: { select: { station: true, stationItems: { select: { laundryItemId: true, quantityInput: true } } } },
     },
   },
   worker: { select: { user: { select: { name: true } } } },
@@ -120,12 +125,6 @@ const getReferenceItems = (station: StationWithHistory): ItemInput[] => {
   return prev?.stationItems ?? [];
 };
 
-const ensureItemsProvided = (items: ItemInput[]) => {
-  if (!items || items.length === 0) {
-    throw Object.assign(new Error('Item wajib diisi'), { status: 400 });
-  }
-};
-
 type CompletableStation = { workerId: string | null; status: StationStatus } | null;
 
 const ensureCanCompleteStation = (station: CompletableStation, workerId: string) => {
@@ -142,13 +141,6 @@ const ensureItemsMatch = (items: ItemInput[], reference: ItemInput[]) => {
       { status: 400, mismatches },
     );
   }
-};
-
-const saveStationItems = async (tx: Prisma.TransactionClient, stationId: string, items: ItemInput[]) => {
-  await tx.stationItem.deleteMany({ where: { stationId } });
-  await tx.stationItem.createMany({
-    data: items.map((i) => ({ stationId, laundryItemId: i.laundryItemId, quantityInput: i.quantityInput })),
-  });
 };
 
 type CompletionOrderRef = { orderId: string; station: StationName; order: { pickupRequestId: string; outletId: string } };

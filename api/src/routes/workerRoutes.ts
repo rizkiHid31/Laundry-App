@@ -7,6 +7,7 @@ import {
   startStation,
   completeStation,
   requestBypass,
+  getPendingBypasses,
   approveBypass,
   rejectBypass,
   getOrdersWaitingPayment,
@@ -42,6 +43,11 @@ router.post(
 router.get('/history', requireEmployeeRole('worker') as any, getWorkerHistory as any);
 
 // Admin bypass approval routes
+router.get(
+  '/bypass/pending',
+  requireEmployeeRole('outlet_admin', 'super_admin') as any,
+  getPendingBypasses as any,
+);
 router.patch(
   '/bypass/:bypassId/approve',
   requireEmployeeRole('outlet_admin', 'super_admin') as any,

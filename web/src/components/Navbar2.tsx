@@ -11,7 +11,7 @@ export default function Navbar() {
   const isDriver = roleNames.includes('driver');
   const isWorker = roleNames.includes('worker');
   const isOutletAdmin = roleNames.includes('outlet_admin') || roleNames.includes('super_admin');
-  const isEmployee = isDriver || isWorker;
+  const isEmployee = isDriver || isWorker || isOutletAdmin;
 
   const handleLogout = () => {
     logout();
@@ -106,6 +106,14 @@ export default function Navbar() {
                     className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
                   >
                     Waiting Payment
+                  </Link>
+                )}
+                {isOutletAdmin && (
+                  <Link
+                    to="/admin/bypass"
+                    className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition"
+                  >
+                    Bypass Approval
                   </Link>
                 )}
                 <Link
@@ -220,6 +228,14 @@ export default function Navbar() {
                         className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
                       >
                         Waiting Payment
+                      </Link>
+                    )}
+                    {isOutletAdmin && (
+                      <Link
+                        to="/admin/bypass"
+                        className="px-4 py-2 text-blue-600 font-medium hover:bg-blue-50 rounded-lg transition text-center"
+                      >
+                        Bypass Approval
                       </Link>
                     )}
                     <Link

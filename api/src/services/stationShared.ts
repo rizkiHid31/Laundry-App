@@ -37,6 +37,22 @@ export const checkMismatch = (inputs: ItemInput[], references: ItemInput[]) => {
   });
 };
 
+export const ensureItemsProvided = (items: ItemInput[]) => {
+  if (!items || items.length === 0) {
+    throw Object.assign(new Error('Item wajib diisi'), { status: 400 });
+  }
+};
+
+// Shared by completeStation (normal path) and approveBypass (exception path):
+// persists the worker-reported quantities so the next station has a reference
+// to validate against, and job history shows what was actually recorded.
+export const saveStationItems = async (tx: Prisma.TransactionClient, stationId: string, items: ItemInput[]) => {
+  await tx.stationItem.deleteMany({ where: { stationId } });
+  await tx.stationItem.createMany({
+    data: items.map((i) => ({ stationId, laundryItemId: i.laundryItemId, quantityInput: i.quantityInput })),
+  });
+};
+
 const finishPacking = async (tx: Prisma.TransactionClient, orderId: string, pickupRequestId: string, outletId: string, isPaid: boolean) => {
   const newOrderStatus = isPaid ? OrderStatus.READY_TO_DELIVER : OrderStatus.WAITING_PAYMENT;
   await tx.order.update({ where: { id: orderId }, data: { status: newOrderStatus } });

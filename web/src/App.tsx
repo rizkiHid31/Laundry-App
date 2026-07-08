@@ -22,6 +22,7 @@ import WorkerDashboardPage from './pages/worker/WorkerDashboardPage';
 import StationDetailPage from './pages/worker/StationDetailPage';
 import WorkerHistoryPage from './pages/worker/WorkerHistoryPage';
 import OrdersWaitingPaymentPage from './pages/admin/OrdersWaitingPaymentPage';
+import BypassApprovalPage from './pages/admin/BypassApprovalPage';
 
 function App() {
   return (
@@ -78,6 +79,9 @@ function App() {
 
           {/* Feature 3 — Admin: payment retry gate for packing */}
           <Route path="/admin/orders/waiting-payment" element={<ProtectedRoute><OrdersWaitingPaymentPage /></ProtectedRoute>} />
+
+          {/* Feature 3 — Admin: bypass approval */}
+          <Route path="/admin/bypass" element={<ProtectedRoute><BypassApprovalPage /></ProtectedRoute>} />
 
           {/* Catch all - redirect to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

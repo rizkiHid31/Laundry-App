@@ -47,12 +47,23 @@ export const completeStation = async (req: EmployeeRequest, res: Response): Prom
 export const requestBypass = async (req: EmployeeRequest, res: Response): Promise<void> => {
   try {
     const { stationId } = req.params as { stationId: string };
-    const { reason } = req.body as { reason: string };
-    const bypass = await bypassService.requestBypass(stationId, reason);
+    const { reason, items } = req.body as { reason: string; items: { laundryItemId: string; quantityInput: number }[] };
+    const bypass = await bypassService.requestBypass(stationId, reason, items);
     res.status(201).json({ success: true, message: 'Bypass request dikirim', data: bypass });
   } catch (error: any) {
     console.error('requestBypass error:', error);
     res.status(error?.status ?? 500).json({ success: false, message: error.message ?? 'Gagal membuat bypass request' });
+  }
+};
+
+export const getPendingBypasses = async (req: EmployeeRequest, res: Response): Promise<void> => {
+  try {
+    const { outletId } = req.employee!;
+    const result = await bypassService.getPendingBypasses(outletId, req.query as Record<string, unknown>);
+    res.json({ success: true, data: result.bypasses, meta: result.meta });
+  } catch (error) {
+    console.error('getPendingBypasses error:', error);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data bypass' });
   }
 };
 

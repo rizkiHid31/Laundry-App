@@ -4,6 +4,7 @@ import api from '../../lib/api';
 
 interface ItemInput { laundryItemId: string; quantityInput: number; name: string; }
 interface OrderItem { laundryItemId: string; quantity: number; laundryItem: { name: string; unit: string }; }
+interface StationHistory { station: string; stationItems: { laundryItemId: string; quantityInput: number }[]; }
 interface StationData {
   id: string;
   station: string;
@@ -11,9 +12,23 @@ interface StationData {
   order: {
     invoiceNumber: string;
     orderItems: OrderItem[];
+    orderStations: StationHistory[];
     pickupRequest: { customer: { name: string } };
   };
 }
+
+const prevStationOf: Record<string, string> = { IRONING: 'WASHING', PACKING: 'IRONING' };
+
+// Mirrors getReferenceItems in api/src/services/workerService.ts: WASHING compares
+// against the original order quantity, later stations compare against what the
+// previous station actually recorded.
+const getReferenceItems = (found: StationData): { laundryItemId: string; quantityInput: number }[] => {
+  if (found.station === 'WASHING') {
+    return found.order.orderItems.map((i) => ({ laundryItemId: i.laundryItemId, quantityInput: i.quantity }));
+  }
+  const prevStation = prevStationOf[found.station];
+  return found.order.orderStations.find((s) => s.station === prevStation)?.stationItems ?? [];
+};
 
 export default function StationDetailPage() {
   const { stationId } = useParams<{ stationId: string }>();
@@ -33,10 +48,13 @@ export default function StationDetailPage() {
     const found: StationData | undefined = (res.data.data ?? []).find((s: StationData) => s.id === stationId);
     if (found) {
       setStation(found);
-      setItems(found.order.orderItems.map((i) => ({
+      const nameOf = (laundryItemId: string) =>
+        found.order.orderItems.find((i) => i.laundryItemId === laundryItemId)?.laundryItem.name ?? '-';
+      const reference = getReferenceItems(found);
+      setItems(reference.map((i) => ({
         laundryItemId: i.laundryItemId,
-        quantityInput: i.quantity,
-        name: i.laundryItem.name,
+        quantityInput: i.quantityInput,
+        name: nameOf(i.laundryItemId),
       })));
     }
     setLoading(false);
@@ -74,7 +92,10 @@ export default function StationDetailPage() {
     }
     setSubmitting(true);
     try {
-      const res = await api.post(`/api/workers/orders/${stationId}/bypass`, { reason: bypassReason });
+      const res = await api.post(`/api/workers/orders/${stationId}/bypass`, {
+        reason: bypassReason,
+        items: items.map(({ laundryItemId, quantityInput }) => ({ laundryItemId, quantityInput })),
+      });
       setMessage(res.data.message);
       setIsError(false);
       setTimeout(() => navigate('/worker'), 1500);

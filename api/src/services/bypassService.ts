@@ -1,6 +1,36 @@
 import { Prisma, StationStatus, BypassStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { advanceOrderStage } from './stationShared';
+import { getPagination, buildMeta } from '../utils/pagination';
+import { advanceOrderStage, ensureItemsProvided, saveStationItems, ItemInput } from './stationShared';
+
+const pendingBypassInclude = {
+  station: {
+    select: {
+      station: true,
+      worker: { select: { user: { select: { name: true } } } },
+      order: {
+        select: {
+          invoiceNumber: true,
+          orderItems: { include: { laundryItem: { select: { name: true } } } },
+        },
+      },
+    },
+  },
+};
+
+export const getPendingBypasses = async (outletId: string, query: Record<string, unknown>) => {
+  const { page, limit, skip } = getPagination(query);
+  const where = { status: BypassStatus.PENDING, station: { order: { outletId } } };
+
+  const [bypasses, total] = await prisma.$transaction([
+    prisma.bypassRequest.findMany({
+      where, include: pendingBypassInclude, orderBy: { createdAt: 'asc' }, skip, take: limit,
+    }),
+    prisma.bypassRequest.count({ where }),
+  ]);
+
+  return { bypasses, meta: buildMeta(page, limit, total) };
+};
 
 const ensureValidAdminNote = (adminNote: string, message: string) => {
   if (!adminNote || adminNote.trim().length < 5) {
@@ -15,10 +45,11 @@ const ensureNoPendingBypass = async (stationId: string) => {
   }
 };
 
-export const requestBypass = async (stationId: string, reason: string) => {
+export const requestBypass = async (stationId: string, reason: string, items: ItemInput[]) => {
   if (!reason || reason.trim().length < 10) {
     throw Object.assign(new Error('Alasan minimal 10 karakter'), { status: 400 });
   }
+  ensureItemsProvided(items);
 
   const station = await prisma.orderStation.findUnique({ where: { id: stationId } });
   if (!station || station.status !== StationStatus.IN_PROGRESS) {
@@ -26,7 +57,9 @@ export const requestBypass = async (stationId: string, reason: string) => {
   }
   await ensureNoPendingBypass(stationId);
 
-  return prisma.bypassRequest.create({ data: { stationId, reason: reason.trim() } });
+  return prisma.bypassRequest.create({
+    data: { stationId, reason: reason.trim(), reportedItems: items as unknown as Prisma.InputJsonValue },
+  });
 };
 
 const findPendingBypass = async (bypassId: string) => {
@@ -47,6 +80,7 @@ const persistBypassApproval = async (tx: Prisma.TransactionClient, bypass: Pendi
     where: { id: bypass.id },
     data: { status: BypassStatus.APPROVED, adminId, adminNote: adminNote.trim(), approvedAt: new Date() },
   });
+  await saveStationItems(tx, bypass.stationId, bypass.reportedItems as unknown as ItemInput[]);
   await tx.orderStation.update({
     where: { id: bypass.stationId },
     data: { status: StationStatus.BYPASSED, completedAt: new Date() },
